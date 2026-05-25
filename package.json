@@ -1,0 +1,12 @@
+{
+  "name": "vibereading-skill",
+  "version": "1.0.0",
+  "description": "A VibeReading skill for AI agents to generate immersive reading companion spaces.",
+  "scripts": {
+    "test": "node vibereading-skill/references/tests/note-share-export.test.js && echo 'Note export tests passed.'",
+    "test:output": "node vibereading-skill/references/tests/evaluate-vibereading-output.mjs"
+  },
+  "keywords": ["ai", "agent", "skill", "reading", "companion", "creative-coding", "generative-ui"],
+  "author": "",
+  "license": "AGPL-3.0-only"
+}
