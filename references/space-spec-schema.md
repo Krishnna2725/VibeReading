@@ -1,44 +1,25 @@
-# SpaceSpec JSON Schema
+# 精简 SpaceSpec 结构
 
-VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为唯一输出格式，所有字段必须填写，没有合适值时写空字符串 `""` 或空数组 `[]`。
+只记录会真实改变生成体验的决策。JSON 字段名保持稳定，字段内容使用中文。
 
 ```json
 {
-  "book": { "title": "", "author": "", "language": "zh" },
-  "template": {
-    "primary": "",
-    "file": "references/templates/[template-id].md",
-    "fit": "",
-    "secondary": ""
-  },
-  "rendering": {
-    "mode": "dom|canvas-enhanced|three-diegetic",
-    "rationale": "",
-    "threeWorldAction": "",
-    "domSemanticSurface": "",
-    "fallbackMode": "dom|canvas-enhanced",
-    "performanceBudget": ""
-  },
-  "artDirection": {
-    "conceptImage": "concept-image.png",
-    "conceptPrompt": "",
-    "visualBrief": "visual-brief.json",
-    "styleFamily": "",
-    "brightnessRange": "light|mid|dark|mixed",
-    "abstractionLevel": "abstract|semi-abstract|representational",
-    "tastePrinciple": "",
-    "imageRole": "worldLayer|physicalSurface|stageSpace|textureSource",
-    "frontendUse": ""
-  },
-  "spirit": {
+  "book": {
+    "title": "",
+    "author": "",
     "coreTension": "",
-    "emotionalTemperature": [],
     "dominantImage": "",
-    "spatialMetaphor": "",
-    "avoid": []
+    "spatialMetaphor": ""
   },
-  "visual": {
-    "atmosphere": "",
+  "template": {
+    "primary": "window|archive|oracle|instrument|rehearsal|vinyl|labyrinth|route",
+    "file": "references/templates/[template-id].md",
+    "fit": ""
+  },
+  "world": {
+    "initialSituation": "",
+    "conceptImageRole": "worldLayer|physicalSurface|stageSpace|textureSource",
+    "conceptImageUse": "",
     "palette": {
       "background": "",
       "surface": "",
@@ -47,46 +28,14 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
       "shadow": "",
       "light": ""
     },
-    "materials": []
-  },
-  "atmosphericEngine": {
-    "persistentLayers": [
-      {"id": "", "type": "light|shadow|texture|weather|depth|signal|cursor|grain", "behavior": "", "implementationHint": ""}
-    ],
-    "weatherEffect": {
+    "materials": [],
+    "weather": {
       "kind": "rain|snow|fog|wind|dust|ash|pollen|dew|heat-haze|storm-light|other",
       "visualBehavior": "",
-      "implementationHint": "",
       "stateResponse": ""
-    },
-    "reactivity": "",
-    "backgroundContinuity": "",
-    "mustNotBecome": []
+    }
   },
-  "composition": {
-    "openingFrame": "",
-    "viewportScale": "intimate|balanced|monumental",
-    "primaryAnchor": "",
-    "titleTreatment": "centered|offset|peripheral|embedded|delayed",
-    "negativeSpace": "",
-    "density": "sparse|restrained|layered",
-    "entryMotion": "",
-    "entryInteraction": "",
-    "uiPresence": "hidden|hinted|embedded|docked|staged",
-    "transitionStyle": "",
-    "antiPattern": []
-  },
-  "sceneChoreography": {
-    "sceneStates": [
-      {"id": "entry", "camera": "", "backgroundShift": "", "contentMotion": ""},
-      {"id": "exploration", "camera": "", "backgroundShift": "", "contentMotion": ""},
-      {"id": "companion", "camera": "", "backgroundShift": "", "contentMotion": ""}
-    ],
-    "transitionGrammar": "",
-    "continuityRule": ""
-  },
-  "interaction": {
-    "mode": "non-scrolling spatial installation",
+  "experience": {
     "signatureMechanic": {
       "name": "",
       "topology": "continuum|sequence|network|combination|spatial-composition|branching-path|cyclical",
@@ -95,40 +44,56 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
       "completionCondition": "",
       "companionTransformation": "",
       "antiRepetitionRule": ""
-    },
-    "acts": [
-      {"id": "entry", "label": "开篇", "purpose": "", "visualState": "", "interactionGoal": ""},
-      {"id": "exploration", "label": "探索", "purpose": "", "visualState": "", "interactionGoal": ""},
-      {"id": "companion", "label": "陪伴", "purpose": "", "visualState": "", "interactionGoal": ""}
+    }
+  },
+  "interaction": {
+    "states": [
+      {"id": "entry", "situation": "", "worldMutation": ""},
+      {"id": "exploration", "situation": "", "worldMutation": ""},
+      {"id": "companion", "situation": "", "worldMutation": ""}
     ],
-    "interactionAnchors": [
-      {"id": "", "label": "", "kind": "object|region|dialogue|card|dial|stop|light|signal|text|gesture", "worldRole": "", "affordance": "", "action": "", "reveals": "", "surfaceBehavior": "", "spatialIntegration": ""}
+    "anchors": [
+      {"id": "", "label": "", "role": "", "action": "", "feedback": ""}
     ],
     "relations": [
       {"from": "", "to": "", "rule": "", "feedback": "", "changes": ""}
     ],
-    "atmosphereControls": [
-      {"id": "", "label": "", "type": "light|sound|weather|tone", "worldRole": "", "states": []}
-    ],
-    "companionMode": {
-      "entry": "",
-      "surfaceForm": "",
-      "lowDistractionBehavior": "",
-      "persistentControls": []
+    "manualAtmosphereControl": {
+      "label": "",
+      "action": "",
+      "visibleChange": ""
     }
   },
   "reading": {
-    "stages": [{"ordinal": "", "label": "", "subtitle": "", "light": "", "sound": "", "hint": ""}],
-    "fragments": [{"title": "", "body": "", "hint": ""}]
+    "tools": ["notes|timer|stage-navigation|focus|ambience-control"],
+    "stages": [
+      {"label": "", "subtitle": "", "light": "", "sound": "", "hint": ""}
+    ],
+    "fragments": [
+      {"title": "", "body": ""}
+    ]
+  },
+  "implementation": {
+    "renderingMode": "dom|canvas-enhanced|three-diegetic",
+    "threeWorldAction": "",
+    "fallback": "",
+    "mobileAdaptation": "",
+    "accessibility": ""
   },
   "audio": {
-    "sounds": [{"id": "", "label": "", "file": ""}],
-    "uiSounds": [{"id": "", "label": "", "file": ""}]
+    "ambience": [{"id": "", "file": ""}],
+    "ui": [{"id": "", "file": ""}]
   },
-  "companion": {
-    "timerLabel": "阅读时长",
-    "noteLabel": "边注",
-    "focusLabel": "专注"
-  }
+  "avoid": []
 }
 ```
+
+规则：
+
+- `anchors`：2-5 个。
+- `relations`：至少 1 条；`archive` 至少 2 条。
+- `states`：必须包含精确 ID `entry`、`exploration`、`companion`。
+- `reading.tools`：选择 2-4 项。
+- `reading.stages`：2-6 个。
+- 仅当使用 `three-diegetic` 时填写 `threeWorldAction`。
+- 所有音频路径必须存在于 `audio-manifest.json`。

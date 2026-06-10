@@ -1,112 +1,36 @@
-# VibeReading Template Index
+# 模板索引
 
-Use this file only to choose one primary template.
-After choosing, read only the selected file in `references/templates/`.
-Do not read the other template files.
+按照读者的主要动作选择一个模板，而不是按照表面图像选择。
+选定后，只读取该模板。
 
-The 8 templates are **interaction prototypes**, not visual skins and not fixed page shells.
-`entry`, `exploration`, and `companion` remain minimum implementation state ids for validation, but the selected template defines the visible surface rhythm, world verbs, image role, unlock conditions, and companion appearance.
-
-Choose by the reader's main action and the page terrain:
-
-```text
-Are they looking through weather, opening evidence, drawing symbols,
-tuning an instrument, shaping light, walking text, or stopping along a route?
-```
-
-The selected template is the main source of creative freedom.
-It should decide:
-
-```text
-world verb
-image role
-visual art bias
-primary affordance set
-progression mechanic
-companion reveal rule
-frontend feasibility limits
-```
-
-The shared protocol does not prescribe a visible rhythm such as invitation -> engagement -> reading.
-Entry may begin mid-action; Companion may emerge by transforming the active surface instead of opening a new container.
-The template test is whether the reader's main action, image use, and sustained reading surface feel specific to the selected prototype.
-
-## Selection Table
-
-| id | file | interaction prototype | best for |
+| id | 读者主要动作 | 拓扑 | 适合 |
 | --- | --- | --- | --- |
-| `window` | `references/templates/window.md` | window observatory / weather room | nature, poetry, travel, rural literature, seasonal books, pages that benefit from generated scenery |
-| `archive` | `references/templates/archive.md` | archive desk / document handling | history, investigations, social critique, testimony, family records, suspense |
-| `oracle` | `references/templates/oracle.md` | oracle spread / symbolic reading | myth, poetry, fate, spirituality, psychology, symbolic works |
-| `instrument` | `references/templates/instrument.md` | instrument receiver / signal and sample console | polyphony, media noise, city books, ecology, philosophy, science, systems |
-| `rehearsal` | `references/templates/rehearsal.md` | light rehearsal room | theater, masks, character psychology, gothic mood, public/private tension |
-| `labyrinth` | `references/templates/labyrinth.md` | text labyrinth / typographic passage | experimental fiction, philosophy, dreams, mystery, recursive texts |
-| `route` | `references/templates/route.md` | route book / station path | travel, exile, migration, roads, rivers, pilgrimage, life stages |
-| `vinyl` | `references/templates/vinyl.md` | vinyl record player / album cover | music history, jazz age, retro culture, memoirs, books centered around rhythm or aural memory |
+| `window` | 观察同一视野随天气和时间变化 | `continuum` / `cyclical` | 自然、诗歌、季节、安静旅行 |
+| `archive` | 对照矛盾证据并形成暂定推断 | `network` | 历史、调查、证言、悬疑 |
+| `oracle` | 排列象征物，让关系产生意义 | `combination` | 神话、诗歌、命运、心理 |
+| `instrument` | 调节变化中的系统，直到信号稳定 | `continuum` | 媒介、系统、科学、生态、哲学 |
+| `rehearsal` | 编排提示顺序、光线与位置 | `spatial-composition` / `sequence` | 戏剧、面具、人物张力 |
+| `vinyl` | 完成循环的聆听与阅读仪式 | `cyclical` / `sequence` | 音乐、记忆、复古文化 |
+| `labyrinth` | 转向、分岔并重读变化的文字路径 | `branching-path` / `cyclical` | 实验小说、梦境、困难语言 |
+| `route` | 选择停靠点，让结果改变后续旅途 | `sequence` / `branching-path` | 旅行、流亡、迁徙、公路、河流 |
 
-## Choosing Rule
-
-Choose the template whose interaction prototype best matches how the reader should approach the book.
-Do not choose by surface imagery alone.
-Do not choose a template because it is easy or impressive to render with Three.js.
-Rendering mode is decided only after the interaction prototype has been selected.
-
-Bad:
+选择时只问：
 
 ```text
-The book mentions countryside, therefore choose window.
+读者需要反复做什么，才能理解这本书？
 ```
 
-Better:
+不要因为适合 Three.js 而选择模板。
+除非用户明确要求，否则不要混合模板。
+
+选中模板负责定义：
 
 ```text
-The reader should sit with weather and gradually find a quiet window for reading,
-therefore choose window.
+签名机制
+交互拓扑
+视觉语法与概念图角色
+初始情境
+天气倾向
+Companion 变形
+实现边界
 ```
-
-Bad:
-
-```text
-The book is philosophical, therefore choose instrument.
-```
-
-Better:
-
-```text
-The reader should scan relations and tune a conceptual system,
-therefore choose instrument. If the reader should walk through difficult language instead,
-choose labyrinth.
-```
-
-Use `template.secondary` only as a short label if a book genuinely has a second pressure.
-Do not read a second template file unless the user explicitly asks for hybrid templates.
-
-## Rendering Bias After Selection
-
-This table is only a post-selection implementation hint. It must never override the interaction-based choosing rule.
-
-| template | default rendering bias | Three.js posture |
-| --- | --- | --- |
-| `instrument` | `dom` or `three-diegetic` | strong fit when knobs, switches, probes, or signal objects drive tuning |
-| `vinyl` | `dom` or `three-diegetic` | strong fit when record, tonearm, sleeve, and side changes drive reading |
-| `oracle` | `dom` or `three-diegetic` | strong fit when drawing, flipping, and arranging cards drive interpretation |
-| `archive` | `dom` or `three-diegetic` | useful for a few weighted desk objects; keep documents and text in DOM |
-| `rehearsal` | `canvas-enhanced` or `three-diegetic` | useful when light position and stage depth reveal relationships |
-| `window` | `dom` or `canvas-enhanced` | use Three.js only when observation distance or spatial depth is meaningful |
-| `route` | `dom` or `canvas-enhanced` | use Three.js only when terrain, height, or distance is meaningful |
-| `labyrinth` | `dom` | typography must remain the maze; avoid 3D game conversion |
-
-## Signature Interaction Topology
-
-Templates must differ in interaction topology, not only in objects and visual styling.
-
-| template | signature topology | non-negotiable relation |
-| --- | --- | --- |
-| `window` | continuum / cyclical | weather, time, and attention continuously alter one view |
-| `archive` | network | evidence must contradict, corroborate, order, or reclassify other evidence |
-| `oracle` | combination | interpretation emerges from card placement and card-to-card relations |
-| `instrument` | continuum | tuning values continuously change signal clarity and reading state |
-| `rehearsal` | spatial-composition / sequence | cue order and light placement change the meaning of the same stage |
-| `vinyl` | cyclical / sequence | sleeve, side, needle position, and playback state form one ritual |
-| `labyrinth` | branching-path / cyclical | turning and rereading alter available text paths |
-| `route` | sequence / branching-path | stops and route choices change distance, weather, and later context |

@@ -13,7 +13,6 @@ const requiredFiles = [
   "style.css",
   "app.js",
   "space-spec.json",
-  "visual-brief.json",
   "concept-image.png",
   "bgm-meta.json"
 ];
@@ -65,6 +64,7 @@ function checkDir(dir) {
   const abs = path.resolve(dir);
   const result = { dir: abs, failures: [], warnings: [], metrics: {} };
   let generatedCode = "";
+  let hasNoteExportAsset = false;
 
   for (const rel of requiredFiles) {
     if (!fs.existsSync(path.join(abs, rel))) result.failures.push(`missing ${rel}`);
@@ -106,8 +106,7 @@ function checkDir(dir) {
     const hasSuspiciousDiagonalStripe = /repeating-linear-gradient\(\s*9[0-9]deg/i.test(code);
     const hasRain = /\brain\b|rain-|rain_/i.test(code);
     const hasParticleRain = /rain-drop|data-particles=["']rain|class=["'][^"']*rain-drop/i.test(code);
-    const hasOrdinalStage = /第[一二三四五六七八九十0-9]+(部分|段|幕|章|站|张|频段|层|步)/.test(code);
-    const hasNoteExportAsset = fs.existsSync(path.join(abs, "assets/note-share-export.js"));
+    hasNoteExportAsset = fs.existsSync(path.join(abs, "assets/note-share-export.js"));
     const hasBgmFile = fs.existsSync(bgmFile);
     const hasBgmReference = /\.\/assets\/audio\/bgm\.mp3/.test(code);
     const hasBgmPlayCall =
@@ -126,14 +125,9 @@ function checkDir(dir) {
       doctype: html.startsWith("<!DOCTYPE html>"),
       splitCss: /href=["']style\.css["']/.test(html) && !/<style\b/i.test(html),
       splitJs: /src=["']app\.js["']/.test(html) && !/<script(?![^>]*\bsrc=)/i.test(html),
-      markdownSave: /VibeReadingNoteShare\.saveMarkdown/.test(code),
-      noteExportScript: hasNoteExportAsset || /VibeReadingNoteShare\s*=/.test(code),
-      timerPause: /pause|暂停|继续|resume|data-timer-toggle/i.test(code),
-      timerReset: /reset|重置|data-timer-reset/i.test(code),
       entry: /entry/.test(code),
       exploration: /exploration/.test(code),
       companion: /companion/.test(code),
-      ordinalStages: hasOrdinalStage,
       noStripeRain: !(hasRain && hasSuspiciousDiagonalStripe && !hasParticleRain)
     };
 
@@ -175,18 +169,15 @@ function checkDir(dir) {
     if (!validTemplates.has(result.metrics.template)) {
       result.failures.push(`space-spec template.primary must be one of ${[...validTemplates].join(", ")}`);
     }
-    const rendering = spec.rendering || {};
-    result.metrics.renderingMode = rendering.mode || "";
+    const implementation = spec.implementation || {};
+    result.metrics.renderingMode = implementation.renderingMode || "";
     const usesThree = /\bTHREE\.|three\.module|from\s+["']three["']|imports\s*:\s*\{[^}]*["']three["']/i.test(generatedCode);
-    if (!validRenderingModes.has(rendering.mode)) {
-      result.failures.push(`space-spec rendering.mode must be one of ${[...validRenderingModes].join(", ")}`);
+    if (!validRenderingModes.has(implementation.renderingMode)) {
+      result.failures.push(`space-spec implementation.renderingMode must be one of ${[...validRenderingModes].join(", ")}`);
     }
-    if (rendering.mode === "three-diegetic") {
-      for (const field of ["rationale", "threeWorldAction", "domSemanticSurface", "fallbackMode", "performanceBudget"]) {
-        if (!rendering[field]) result.failures.push(`space-spec rendering.${field} is required for three-diegetic mode`);
-      }
-      if (!["dom", "canvas-enhanced"].includes(rendering.fallbackMode)) {
-        result.failures.push("space-spec rendering.fallbackMode must be dom or canvas-enhanced for three-diegetic mode");
+    if (implementation.renderingMode === "three-diegetic") {
+      for (const field of ["threeWorldAction", "fallback", "mobileAdaptation", "accessibility"]) {
+        if (!implementation[field]) result.failures.push(`space-spec implementation.${field} is required for three-diegetic mode`);
       }
       if (!usesThree) result.failures.push("space-spec selects three-diegetic but generated code has no detectable Three.js usage");
       if (!/<button\b/i.test(generatedCode)) {
@@ -199,15 +190,11 @@ function checkDir(dir) {
         result.warnings.push("three-diegetic output has no detectable bounded device pixel ratio");
       }
     } else if (usesThree) {
-      result.failures.push(`generated code uses Three.js but space-spec rendering.mode is ${rendering.mode || "missing"}`);
+      result.failures.push(`generated code uses Three.js but space-spec implementation.renderingMode is ${implementation.renderingMode || "missing"}`);
     }
-    const persistentLayers = spec.atmosphericEngine?.persistentLayers || [];
-    const weatherEffect = spec.atmosphericEngine?.weatherEffect || {};
-    if (!persistentLayers.some((layer) => layer.type === "weather")) {
-      result.failures.push("space-spec atmosphericEngine.persistentLayers must include a weather layer");
-    }
-    for (const field of ["kind", "visualBehavior", "implementationHint", "stateResponse"]) {
-      if (!weatherEffect[field]) result.failures.push(`space-spec atmosphericEngine.weatherEffect.${field} is required`);
+    const weatherEffect = spec.world?.weather || {};
+    for (const field of ["kind", "visualBehavior", "stateResponse"]) {
+      if (!weatherEffect[field]) result.failures.push(`space-spec world.weather.${field} is required`);
     }
     const weatherTerms = [
       weatherEffect.kind,
@@ -217,12 +204,12 @@ function checkDir(dir) {
     if (!new RegExp(weatherTerms.join("|"), "i").test(generatedCode)) {
       result.failures.push("generated code has no detectable visible weather implementation");
     }
-    const signature = spec.interaction?.signatureMechanic || {};
+    const signature = spec.experience?.signatureMechanic || {};
     const relations = spec.interaction?.relations || [];
     result.metrics.signatureTopology = signature.topology || "";
     result.metrics.relations = relations.length;
     for (const field of ["name", "topology", "playerAction", "stateMutation", "completionCondition", "companionTransformation", "antiRepetitionRule"]) {
-      if (!signature[field]) result.failures.push(`space-spec interaction.signatureMechanic.${field} is required`);
+      if (!signature[field]) result.failures.push(`space-spec experience.signatureMechanic.${field} is required`);
     }
     if (signature.topology && !validTopologies.has(signature.topology)) {
       result.failures.push(`space-spec signature topology must be one of ${[...validTopologies].join(", ")}`);
@@ -239,36 +226,35 @@ function checkDir(dir) {
     if (result.metrics.template === "archive" && !/contradict|corroborat|compare|sequence|timeline|infer|矛盾|印证|对照|排序|时间线|推断/i.test(JSON.stringify({ signature, relations }))) {
       result.failures.push("archive signature mechanic must express evidence comparison, contradiction, sequencing, or inference");
     }
-    result.metrics.sceneStates = spec.sceneChoreography?.sceneStates?.length || 0;
+    result.metrics.sceneStates = spec.interaction?.states?.length || 0;
     result.metrics.stages = spec.reading?.stages?.length || 0;
-    const interactionAnchors =
-      spec.interaction?.interactionAnchors || spec.interaction?.explorationObjects || [];
+    const interactionAnchors = spec.interaction?.anchors || [];
     result.metrics.interactionAnchors = interactionAnchors.length;
-    if (result.metrics.sceneStates < 3 || result.metrics.sceneStates > 8) {
-      result.failures.push("space-spec sceneStates must be 3-8");
+    const stateIds = new Set((spec.interaction?.states || []).map((state) => state.id));
+    if (!["entry", "exploration", "companion"].every((id) => stateIds.has(id))) {
+      result.failures.push("space-spec interaction.states must include entry, exploration, and companion");
     }
-    if (result.metrics.stages < 3 || result.metrics.stages > 8) {
-      result.failures.push("space-spec reading.stages must be 3-8");
+    if (result.metrics.stages < 2 || result.metrics.stages > 6) {
+      result.failures.push("space-spec reading.stages must be 2-6");
     }
     if (result.metrics.interactionAnchors < 2 || result.metrics.interactionAnchors > 5) {
-      result.failures.push("space-spec interaction.interactionAnchors must be 2-5");
+      result.failures.push("space-spec interaction.anchors must be 2-5");
     }
-    if (spec.interaction?.explorationObjects) {
-      result.warnings.push("space-spec uses legacy interaction.explorationObjects; prefer interaction.interactionAnchors");
+    if (!spec.world?.conceptImageRole || !spec.world?.conceptImageUse) {
+      result.failures.push("space-spec world must include conceptImageRole and conceptImageUse");
     }
-    if (!spec.artDirection?.imageRole || !spec.artDirection?.frontendUse) {
-      result.failures.push("space-spec artDirection must include imageRole and frontendUse");
+    const readingTools = spec.reading?.tools || [];
+    result.metrics.readingTools = readingTools.length;
+    if (readingTools.length < 2 || readingTools.length > 4) {
+      result.failures.push("space-spec reading.tools must select 2-4 tools");
     }
-  }
-
-  const briefFile = path.join(abs, "visual-brief.json");
-  if (fs.existsSync(briefFile)) {
-    const brief = readJson(briefFile);
-    result.metrics.styleFamily = brief.styleFamily?.name || brief.styleFamily || "";
-    result.metrics.brightnessRange = brief.styleFamily?.brightnessRange || brief.brightnessRange || "";
-    if (!result.metrics.styleFamily) result.failures.push("visual-brief missing styleFamily");
-    if (!brief.imageUse?.role || !brief.imageUse?.frontendOverlayPlan) {
-      result.failures.push("visual-brief missing imageUse.role or imageUse.frontendOverlayPlan");
+    if (readingTools.includes("notes")) {
+      if (!/VibeReadingNoteShare\.saveMarkdown/.test(generatedCode)) result.failures.push("notes tool selected but Markdown export call is missing");
+      if (!hasNoteExportAsset && !/VibeReadingNoteShare\s*=/.test(generatedCode)) result.failures.push("notes tool selected but note export script is missing");
+    }
+    if (readingTools.includes("timer")) {
+      if (!/pause|暂停|继续|resume|data-timer-toggle/i.test(generatedCode)) result.failures.push("timer tool selected but pause/resume control is missing");
+      if (!/reset|重置|data-timer-reset/i.test(generatedCode)) result.failures.push("timer tool selected but reset control is missing");
     }
   }
 

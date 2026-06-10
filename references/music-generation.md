@@ -1,36 +1,29 @@
-# Music Generation (BGM)
+# BGM 生成
 
-Use MiniMax `music-2.6-free` to generate strictly instrumental BGM with no lyrics and no vocals. Domestic Chinese API endpoint — do NOT use proxy.
+使用 MiniMax `music-2.6-free` 生成严格的纯音乐 BGM，不得包含歌词或人声。国内接口不使用代理。
 
-Every request must include `"is_instrumental": true`. Never ask for vocals, singing, spoken words, chants, lyrics, or vocal pads.
+每次请求必须包含 `"is_instrumental": true`。
+提示词不得要求歌唱、朗诵、吟唱、歌词、人声垫底或 vocal pads。
 
-## Prerequisites
+## 前置条件
 
-- `MINIMAX_API_KEY` must be set in environment
-- If not set, skip BGM and write `bgm-meta.json` with `status: "skipped"`
+- 环境变量中必须存在 `MINIMAX_API_KEY`。
+- 如果未配置，跳过生成，并将 `bgm-meta.json` 的 `status` 写为 `"skipped"`。
 
-## Timing
+## 异步工作流
 
-Free tier (`music-2.6-free`) 实测很慢，约 **120–150 秒**才返回响应。不要同步等待。
-
-## 异步工作流（推荐）
-
-BGM 生成很慢，但 agent 不应该干等。正确的做法是 **先发请求 → 继续干活 → 最后回来收结果**：
+免费模型实测约需 120-150 秒。不要同步干等：
 
 ```text
-1. 在生成 space-spec.json 之后、生成 HTML/CSS/JS 之前，后台发起 BGM 请求
-2. 不等待响应，直接继续生成 HTML/CSS/JS
-3. 先写 bgm-meta.json status: "pending"
-4. 完成所有其他工作后，回来检查 BGM 结果
-   - 如果响应已就绪 → 下载 mp3，更新 bgm-meta.json 为 "generated"
-   - 如果仍未响应 → 再等 30 秒，再检查一次
-   - 如果超时 180 秒 → 写 "failed"，页面用环境音替代
-5. 最后更新 index.html 和 app.js 引用 bgm.mp3
+1. 完成 space-spec.json 后，后台发起 BGM 请求。
+2. 继续生成 HTML、CSS 和 JS。
+3. 暂时写入 bgm-meta.json，status 为 "pending"。
+4. 其他工作结束后检查响应。
+5. 成功则下载 mp3；超过 180 秒则写为 "failed"。
+6. 无论 BGM 是否成功，页面都必须能使用普通环境音运行。
 ```
 
-## API Call
-
-发送请求（后台运行，不等结果）：
+## API 请求
 
 ```bash
 curl -s -X POST "https://api.minimaxi.com/v1/music_generation" \
@@ -46,26 +39,31 @@ curl -s -X POST "https://api.minimaxi.com/v1/music_generation" \
   }' > output/[run-folder]/bgm_response.json &
 ```
 
-Response: `data.audio` = download URL, `data.status` = 2 when ready. Download:
+响应中的 `data.audio` 是下载地址，`data.status` 为 `2` 时表示完成：
 
 ```bash
 curl -L -o "output/[run-folder]/assets/audio/bgm.mp3" "<data.audio>"
 ```
 
-## Prompt
+## 提示词
 
-Generate from SpaceSpec's `emotionalTemperature`, `dominantImage`, `atmosphere`. Describe **emotion and scene** — not genre labels. Write in English.
+根据 SpaceSpec 中的核心张力、主导意象、空间天气和情绪生成。
+描述情绪、场景、速度、乐器与动态，不要只写音乐类型。
+提示词使用英文，并在结尾附加：
 
-End every prompt with: `Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.`
+```text
+必须是纯音乐：不得包含人声、演唱、口白或歌词。
+```
 
-**Best example** (melancholic/cinematic):
+示例：
+
 > Cinematic, melancholic reading atmosphere, slow tempo, cold yet immersive, sparse piano, bowed strings, distant resonant percussion, restrained dynamics, suitable for introspective reading. Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.
 
 ## bgm-meta.json
 
 ```json
 {
-  "status": "generated",  // "generated" | "pending" | "skipped" | "failed"
+  "status": "generated",
   "is_instrumental": true,
   "file": "./assets/audio/bgm.mp3",
   "prompt": "...",
@@ -73,4 +71,5 @@ End every prompt with: `Strictly instrumental, no vocals, no singing, no spoken 
 }
 ```
 
-If API call fails (non-zero `base_resp.status_code`), write `status: "failed"` and continue the workflow. Do not block page generation.
+`status` 可为 `generated`、`pending`、`skipped` 或 `failed`。
+API 失败时写入 `failed` 并继续工作，不得阻塞页面生成。
