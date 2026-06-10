@@ -68,6 +68,9 @@ function checkDir(dir) {
     if (!["generated", "skipped", "failed"].includes(bgmMeta.status)) {
       result.failures.push("bgm-meta.json status must be generated, skipped, or failed");
     }
+    if (bgmMeta.is_instrumental !== true) {
+      result.failures.push("bgm-meta.json must declare is_instrumental: true");
+    }
   }
 
   if (fs.existsSync(htmlFile)) {
@@ -178,6 +181,22 @@ function checkDir(dir) {
       }
     } else if (usesThree) {
       result.failures.push(`generated code uses Three.js but space-spec rendering.mode is ${rendering.mode || "missing"}`);
+    }
+    const persistentLayers = spec.atmosphericEngine?.persistentLayers || [];
+    const weatherEffect = spec.atmosphericEngine?.weatherEffect || {};
+    if (!persistentLayers.some((layer) => layer.type === "weather")) {
+      result.failures.push("space-spec atmosphericEngine.persistentLayers must include a weather layer");
+    }
+    for (const field of ["kind", "visualBehavior", "implementationHint", "stateResponse"]) {
+      if (!weatherEffect[field]) result.failures.push(`space-spec atmosphericEngine.weatherEffect.${field} is required`);
+    }
+    const weatherTerms = [
+      weatherEffect.kind,
+      "weather", "rain", "snow", "fog", "mist", "wind", "dust", "ash",
+      "pollen", "dew", "haze", "storm", "drizzle", "天气", "雨", "雪", "雾", "风", "尘"
+    ].filter(Boolean).map((term) => String(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    if (!new RegExp(weatherTerms.join("|"), "i").test(generatedCode)) {
+      result.failures.push("generated code has no detectable visible weather implementation");
     }
     result.metrics.sceneStates = spec.sceneChoreography?.sceneStates?.length || 0;
     result.metrics.stages = spec.reading?.stages?.length || 0;

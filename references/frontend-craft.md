@@ -236,8 +236,12 @@ Small SVG or CSS symbols are allowed only as subtle traces.
 
 ## Atmospheric Effects
 
-Only add concrete weather, particles, insects, falling objects, scanlines, or signal effects when the selected template and book call for them.
-When an effect is needed, read `references/effects-recipes.md` and use the relevant recipe.
+Every generated page must include at least one persistent, visible, low-distraction weather effect selected for the book and template.
+Read `references/effects-recipes.md` and use or adapt the relevant recipe.
+Weather may be rain, snow, fog, wind, dust, ash, pollen, dew, heat haze, storm light, or another credible atmospheric condition.
+Color changes, audio-only ambience, scanlines, signal noise, generic glow, and random particles do not count as weather.
+The effect must remain recognizable across states, avoid readable surfaces, and reduce density or motion in Companion mode.
+Additional insects, falling objects, scanlines, or signal effects remain optional.
 Do not fake rain, snow, dust, leaves, fireflies, butterflies, or signal motes with a single regular full-screen stripe pattern.
 If UI copy, a stage, a tone state, or an audio option explicitly says rain, snow, dust, leaves, fireflies, butterflies, ash, or signal motes, that image needs a visible lightweight layer; otherwise use more abstract wording like "cool", "low noise", "dim", or "wet tone".
 
@@ -347,6 +351,7 @@ Does mobile still feel intentional?
 Are focus states and touch targets usable?
 At a common 16:9 desktop size, do active affordances avoid blocking readable content?
 Do rain, particles, scanlines, and texture each read as their intended effect rather than one noisy pattern?
+Is at least one visible weather effect continuously present, appropriate to the book, and quieter in Companion mode?
 Does a manual light/weather/tone switch visibly change the room, especially when its label implies night, lamp, dusk, or deep focus?
 Is there any large SVG prop that should instead be light, shadow, or material?
 Does the first screen feel like entering a book, not landing on a website?

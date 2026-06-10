@@ -53,8 +53,8 @@ Follow this order. Do not load every reference at once. Use progressive disclosu
    references/audio-manifest.json, and references/space-spec-schema.md.
 8. Generate vibereading-skill/output/[run-folder]/space-spec.json with Prompt 1 → validate.
 9. Read references/music-generation.md → generate BGM. Write bgm-meta.json.
-10. Read references/effects-recipes.md only if the template, visual brief, or
-    SpaceSpec needs rain, snow, dust, leaves, insects, signal, or scanlines.
+10. Read references/effects-recipes.md. Every page must implement at least one
+    persistent, visible, low-distraction weather effect chosen for the book.
 11. Generate vibereading-skill/output/[run-folder]/index.html, style.css, and app.js with Prompt 2 → validate.
 12. Copy referenced audio files from assets/audio/ to vibereading-skill/output/[run-folder]/assets/audio/.
 13. Do a quick browser smoke scan: inspect the initial state, perform the selected template's core action, dismiss any opened overlay/backdrop if present, and reach the sustained reading mode.
@@ -148,7 +148,7 @@ Entry / Exploration / Companion 是最低协议状态，不是固定三幕叙事
 - `spatialMetaphor` 给 coding AI 一个可实现的空间说明。
 - `templateFit` 解释为什么选这个模板，而不是表面图像匹配。
 - 让 `artDirection.imageRole` 与已选模板的 Image Role 对齐：这张概念图在前端里是世界层、物理表面、舞台空间，还是纹理/碎片来源；`frontendUse` 写明它如何进入 HTML/CSS。
-- `atmosphericEngine` 说明持续存在的空间天气：光、影、纹理、粒子/线条、景深、环境运动。
+- `atmosphericEngine` 说明持续存在的空间天气：光、影、纹理、粒子/线条、景深、环境运动。每次生成必须实现至少一种持续、可见、低干扰的天气效果；不得只用颜色或音频冒充天气。
 - `sceneChoreography` 说明状态之间如何通过模糊、缩放、残影、换光、层移、显影推进；至少包含 entry、exploration、companion 三个协议 id，但这些 id 只代表功能阶段，表层节奏应按模板扩展为 4-8 个状态。
 - initial state 只保留一个主导邀请；它可以是窗口、桌面封口、牌堆、仪器、灯位、房间物件、文字走廊、路线标记或其他模板定义的入口。
 - `interaction.interactionAnchors` 提供 2 到 5 个模板原生 affordances；它们可以是物件、区域、信号、卡牌、仪表、停靠点、光位、声音、文字块或持续操作，不必统一表现为按钮物件。
@@ -208,7 +208,7 @@ Frontend Craft Contract 是实现纪律，不是视觉风格预设：
 
 [FRONTEND_CRAFT_DOC]
 
-Effect Recipes 是按需参考。只有 SpaceSpec 或模板明确需要雨、雪、尘、落叶、萤火、蝴蝶、扫描线等效果时，才使用相关 recipe，不要为了使用效果而添加效果。若未读取该文件，则这里填“未读取；本页不需要具体效果 recipe”：
+Effect Recipes 是必读参考。每次生成必须选择至少一种符合书籍气质的可见天气效果；其他非天气效果按需使用：
 
 [EFFECT_RECIPES_DOC]
 
@@ -281,7 +281,8 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 
 - Valid JSON. `template.primary` is a valid id, `template.file` matches the selected template.
 - `rendering.mode` is `dom`, `canvas-enhanced`, or `three-diegetic`; if `three-diegetic`, `threeWorldAction`, `domSemanticSurface`, `fallbackMode`, and `performanceBudget` are non-empty.
-- `atmosphericEngine.persistentLayers` ≥ 5; must include light, texture, depth.
+- `atmosphericEngine.persistentLayers` ≥ 5; must include light, texture, depth, and weather.
+- `atmosphericEngine.weatherEffect` is fully specified and visibly implemented.
 - `sceneChoreography.sceneStates` and `interaction.acts` both include exact ids `entry`, `exploration`, and `companion`.
   Expanded template states may add extra ids, but must not replace or rename these three standard states.
 - `interaction.interactionAnchors` has 2-5 items, each with `kind`, `worldRole`, `affordance`, `action`, `reveals`, `surfaceBehavior`, and `spatialIntegration`.
@@ -292,6 +293,7 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 ### BGM
 
 - `bgm-meta.json` exists with status `generated`, `skipped`, or `failed`.
+- `bgm-meta.json` declares `is_instrumental: true`; every MiniMax request includes `"is_instrumental": true` and prompts contain no vocals or lyrics.
 - If status is `generated`, `assets/audio/bgm.mp3` exists and `index.html` references it.
 - If status is `skipped` or `failed`, the page still works with ordinary ambience audio and must not reference missing BGM.
 
@@ -305,6 +307,7 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 - 三个文件齐全：`index.html`（`<!DOCTYPE html>`）、`style.css`、`app.js`。`index.html` 正确引用另外两个文件（`href="style.css"` / `src="app.js"`）。无内联 `<style>` 或 `<script>` 块。
 - Non-scrolling fixed viewport. The three protocol capabilities are discoverable: initial orientation → template-native active engagement → sustained reading.
 - Persistent atmospheric engine visible across all states (not static BG swaps).
+- At least one visible, persistent weather effect remains present across states and becomes quieter in Companion mode.
 - Spatial transitions (not show/hide panels). Sustained reading mode is calm, not a dashboard, and its reveal rule follows the selected template.
 - Timer with pause/resume + reset, notes with Markdown export, stage switching, focus mode; placement and visual form follow the selected template.
 - If BGM status is `generated`, the Companion mode includes a working BGM toggle and starts playback only after a user gesture.

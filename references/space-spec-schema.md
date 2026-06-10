@@ -53,6 +53,12 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
     "persistentLayers": [
       {"id": "", "type": "light|shadow|texture|weather|depth|signal|cursor|grain", "behavior": "", "implementationHint": ""}
     ],
+    "weatherEffect": {
+      "kind": "rain|snow|fog|wind|dust|ash|pollen|dew|heat-haze|storm-light|other",
+      "visualBehavior": "",
+      "implementationHint": "",
+      "stateResponse": ""
+    },
     "reactivity": "",
     "backgroundContinuity": "",
     "mustNotBecome": []

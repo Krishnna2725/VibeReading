@@ -1,13 +1,18 @@
 # Atmospheric Effects Recipes
 
-Read this file only when the selected template or visual brief explicitly needs concrete atmospheric effects.
-Do not add rain, snow, dust, leaves, insects, scanlines, or particles just because this file exists.
+Read this file for every generation.
+Every page must implement at least one persistent, visible, low-distraction weather effect selected for the book and template.
+Do not default every page to rain or snow: fog, wind, dust, ash, pollen, dew, heat haze, and storm light are also valid weather.
+Leaves, insects, scanlines, signal motes, and decorative particles do not satisfy the weather requirement by themselves.
 
 ## Core Rule
 
 Natural and atmospheric effects should be living elements, not wallpaper.
 Prefer small generated element sets with varied position, delay, duration, opacity, size, blur, and drift.
 Avoid single full-screen `repeating-linear-gradient` layers that create barcode, fence, or screen-door artifacts.
+
+The selected weather must remain recognizable across states, respond to scene or atmosphere changes, and become quieter in Companion mode.
+Color shifts, audio-only ambience, scanlines, signal noise, generic glow, and random particles do not count as weather.
 
 If a stage, tone, sound, button, or label explicitly names a concrete image such as rain, snow, dust, falling leaves, fireflies, butterflies, ash, or signal motes, the rendered page must include a lightweight visible layer for that image.
 Do not use "rain", "snow", or similar concrete words when the page only changes color, audio, or mood.
@@ -130,6 +135,16 @@ const softFall = Array.from({ length: 42 }, (_, i) => ({
 
 Represent snow with pale dots, ash with gray flakes, dust with tiny warm motes, and pollen with soft yellow specks.
 Use fewer particles in companion mode.
+
+## Fog / Wind / Dew / Heat Haze
+
+These effects are useful when falling particles would not fit the book.
+
+- **Fog**: use 2-5 oversized blurred layers with different drift directions and very low opacity. Fog must reveal depth by passing behind foreground objects and in front of distant layers.
+- **Wind**: make existing environmental traces respond together, such as paper corners, curtain edges, dust direction, grass shadows, or hanging labels. A generic moving gradient alone is not wind.
+- **Dew / condensation**: use sparse translucent droplets or a mask on glass and cold surfaces. Let light catch the droplets; keep them away from readable text.
+- **Heat haze**: use a localized, slow distortion or blurred shimmer above a plausible surface. Never distort readable UI.
+- **Storm light**: use rare, restrained illumination changes paired with visible cloud, rain, or shadow pressure. A flashing screen alone is not weather.
 
 ## Leaves / Paper Scraps
 

@@ -1,6 +1,8 @@
 # Music Generation (BGM)
 
-Use MiniMax `music-2.6-free` to generate instrumental BGM. Domestic Chinese API endpoint — do NOT use proxy.
+Use MiniMax `music-2.6-free` to generate strictly instrumental BGM with no lyrics and no vocals. Domestic Chinese API endpoint — do NOT use proxy.
+
+Every request must include `"is_instrumental": true`. Never ask for vocals, singing, spoken words, chants, lyrics, or vocal pads.
 
 ## Prerequisites
 
@@ -54,14 +56,17 @@ curl -L -o "output/[run-folder]/assets/audio/bgm.mp3" "<data.audio>"
 
 Generate from SpaceSpec's `emotionalTemperature`, `dominantImage`, `atmosphere`. Describe **emotion and scene** — not genre labels. Write in English.
 
+End every prompt with: `Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.`
+
 **Best example** (melancholic/cinematic):
-> Cinematic, melancholic mood, ethereal and airy vocal textures, light distant vocals blending with a somber undertone, like a film-score interlude immersed in atmosphere, slow tempo, cold yet immersive, the ethereal voice amplifies emotional delicacy and narrative depth, instrumental with subtle vocal pads, suitable for introspective reading
+> Cinematic, melancholic reading atmosphere, slow tempo, cold yet immersive, sparse piano, bowed strings, distant resonant percussion, restrained dynamics, suitable for introspective reading. Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.
 
 ## bgm-meta.json
 
 ```json
 {
   "status": "generated",  // "generated" | "pending" | "skipped" | "failed"
+  "is_instrumental": true,
   "file": "./assets/audio/bgm.mp3",
   "prompt": "...",
   "reason": ""

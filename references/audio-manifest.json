@@ -89,16 +89,16 @@
       "file": "ui/ui-click-43196.mp3",
       "mood": ["交互", "点击", "UI"],
       "type": "sfx"
-    }
-  ],
-  "indoor": [
+    },
     {
       "id": "book-turn-page",
       "label": "翻书声",
-      "file": "indoor/book-turn-page.mp3",
-      "mood": ["阅读", "纸页", "安静"],
+      "file": "ui/book-turn-page.mp3",
+      "mood": ["阅读", "纸页", "交互"],
       "type": "sfx"
-    },
+    }
+  ],
+  "indoor": [
     {
       "id": "a-small-library",
       "label": "小图书馆",
