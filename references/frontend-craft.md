@@ -53,6 +53,29 @@ The engine should respond to state changes with different light pressure, blur o
 Avoid a static illustrated background with controls pasted on top.
 概念图的具体使用方式由 art-direction.md 和 visual-brief.json 的 `assetPolicy` 决定；frontend-craft 不规定图片如何作为结构层。
 
+## Rendering Mode Decision
+
+SpaceSpec 的 `rendering.mode` 必须选择一种实现重心：
+
+```text
+dom             -> DOM / CSS 构成主要空间、物件与交互
+canvas-enhanced -> DOM 承担交互与文本，Canvas / WebGL 只增强天气、信号、景深或局部视觉
+three-diegetic  -> 少量可交互 3D 物件直接承担模板世界动作
+```
+
+只有当“操作三维物件”本身就是书籍理解路径的一部分时，才选择 `three-diegetic`。自动旋转模型、纯展示房间、与状态推进无关的景深，不足以支持该选择。
+
+使用 `three-diegetic` 时：
+
+- Three.js 负责场景物件、材质、光照和空间反馈；DOM 继续负责所有阅读文本、状态说明和关键操作语义。
+- 至少一个 3D 世界动作必须直接推进 `entry -> exploration -> companion`，并在 SpaceSpec 的 `rendering.threeWorldAction` 中写明。
+- 每个核心 3D 操作必须有键盘和触屏可用的 DOM 等价入口；Canvas 不能成为唯一交互树。
+- WebGL 初始化失败、CDN 不可用或设备能力不足时，必须启用 `rendering.fallbackMode`，完整状态路径仍可达。
+- 限制设备像素比、阴影分辨率、灯光和 Mesh 数量；移动端主动降低复杂度。
+- 遵循 `prefers-reduced-motion`，页面隐藏时暂停持续渲染和合成音频，离开时释放不再使用的资源。
+
+模板对渲染模式拥有最终约束。即使技术上可行，也不得违反模板文档中的 Three.js 禁区。
+
 ## Design Tokens & Skeuomorphism (拟物化)
 
 Define compact CSS variables and use them consistently:

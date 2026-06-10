@@ -143,6 +143,7 @@ Entry / Exploration / Companion 是最低协议状态，不是固定三幕叙事
 
 - 只收集足够设计空间的上下文，不写百科全书，不剧透关键反转或结局。
 - `coreTension` 用一句话抓住核心矛盾。
+- `rendering.mode` 必须在 `dom`、`canvas-enhanced`、`three-diegetic` 中选择。只有三维物件直接承担模板世界动作并推进阅读状态时才选择 `three-diegetic`；同时写明 DOM 语义表面、降级模式和性能预算。
 - `dominantImage` 写精神画面，不写封面物件。
 - `spatialMetaphor` 给 coding AI 一个可实现的空间说明。
 - `templateFit` 解释为什么选这个模板，而不是表面图像匹配。
@@ -279,6 +280,7 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 ### SpaceSpec (关键字段)
 
 - Valid JSON. `template.primary` is a valid id, `template.file` matches the selected template.
+- `rendering.mode` is `dom`, `canvas-enhanced`, or `three-diegetic`; if `three-diegetic`, `threeWorldAction`, `domSemanticSurface`, `fallbackMode`, and `performanceBudget` are non-empty.
 - `atmosphericEngine.persistentLayers` ≥ 5; must include light, texture, depth.
 - `sceneChoreography.sceneStates` and `interaction.acts` both include exact ids `entry`, `exploration`, and `companion`.
   Expanded template states may add extra ids, but must not replace or rename these three standard states.

@@ -24,10 +24,11 @@ const validTemplates = new Set([
   "oracle",
   "instrument",
   "rehearsal",
-  "room",
+  "vinyl",
   "labyrinth",
   "route"
 ]);
+const validRenderingModes = new Set(["dom", "canvas-enhanced", "three-diegetic"]);
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -44,6 +45,7 @@ function classNames(html) {
 function checkDir(dir) {
   const abs = path.resolve(dir);
   const result = { dir: abs, failures: [], warnings: [], metrics: {} };
+  let generatedCode = "";
 
   for (const rel of requiredFiles) {
     if (!fs.existsSync(path.join(abs, rel))) result.failures.push(`missing ${rel}`);
@@ -73,6 +75,7 @@ function checkDir(dir) {
     const css = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, "utf8") : "";
     const js = fs.existsSync(jsFile) ? fs.readFileSync(jsFile, "utf8") : "";
     const code = `${html}\n${css}\n${js}`;
+    generatedCode = code;
     result.metrics.htmlBytes = Buffer.byteLength(html);
     result.metrics.cssBytes = Buffer.byteLength(css);
     result.metrics.jsBytes = Buffer.byteLength(js);
@@ -149,6 +152,32 @@ function checkDir(dir) {
     result.metrics.template = spec.template?.primary;
     if (!validTemplates.has(result.metrics.template)) {
       result.failures.push(`space-spec template.primary must be one of ${[...validTemplates].join(", ")}`);
+    }
+    const rendering = spec.rendering || {};
+    result.metrics.renderingMode = rendering.mode || "";
+    const usesThree = /\bTHREE\.|three\.module|from\s+["']three["']|imports\s*:\s*\{[^}]*["']three["']/i.test(generatedCode);
+    if (!validRenderingModes.has(rendering.mode)) {
+      result.failures.push(`space-spec rendering.mode must be one of ${[...validRenderingModes].join(", ")}`);
+    }
+    if (rendering.mode === "three-diegetic") {
+      for (const field of ["rationale", "threeWorldAction", "domSemanticSurface", "fallbackMode", "performanceBudget"]) {
+        if (!rendering[field]) result.failures.push(`space-spec rendering.${field} is required for three-diegetic mode`);
+      }
+      if (!["dom", "canvas-enhanced"].includes(rendering.fallbackMode)) {
+        result.failures.push("space-spec rendering.fallbackMode must be dom or canvas-enhanced for three-diegetic mode");
+      }
+      if (!usesThree) result.failures.push("space-spec selects three-diegetic but generated code has no detectable Three.js usage");
+      if (!/<button\b/i.test(generatedCode)) {
+        result.warnings.push("three-diegetic output has no detectable semantic button for equivalent core actions");
+      }
+      if (!/prefers-reduced-motion/i.test(generatedCode)) {
+        result.warnings.push("three-diegetic output has no detectable prefers-reduced-motion handling");
+      }
+      if (!/setPixelRatio\s*\(\s*Math\.min/i.test(generatedCode)) {
+        result.warnings.push("three-diegetic output has no detectable bounded device pixel ratio");
+      }
+    } else if (usesThree) {
+      result.failures.push(`generated code uses Three.js but space-spec rendering.mode is ${rendering.mode || "missing"}`);
     }
     result.metrics.sceneStates = spec.sceneChoreography?.sceneStates?.length || 0;
     result.metrics.stages = spec.reading?.stages?.length || 0;

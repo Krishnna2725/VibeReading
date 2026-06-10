@@ -47,6 +47,8 @@ The template test is whether the reader's main action, image use, and sustained 
 
 Choose the template whose interaction prototype best matches how the reader should approach the book.
 Do not choose by surface imagery alone.
+Do not choose a template because it is easy or impressive to render with Three.js.
+Rendering mode is decided only after the interaction prototype has been selected.
 
 Bad:
 
@@ -77,3 +79,18 @@ choose labyrinth.
 
 Use `template.secondary` only as a short label if a book genuinely has a second pressure.
 Do not read a second template file unless the user explicitly asks for hybrid templates.
+
+## Rendering Bias After Selection
+
+This table is only a post-selection implementation hint. It must never override the interaction-based choosing rule.
+
+| template | default rendering bias | Three.js posture |
+| --- | --- | --- |
+| `instrument` | `dom` or `three-diegetic` | strong fit when knobs, switches, probes, or signal objects drive tuning |
+| `vinyl` | `dom` or `three-diegetic` | strong fit when record, tonearm, sleeve, and side changes drive reading |
+| `oracle` | `dom` or `three-diegetic` | strong fit when drawing, flipping, and arranging cards drive interpretation |
+| `archive` | `dom` or `three-diegetic` | useful for a few weighted desk objects; keep documents and text in DOM |
+| `rehearsal` | `canvas-enhanced` or `three-diegetic` | useful when light position and stage depth reveal relationships |
+| `window` | `dom` or `canvas-enhanced` | use Three.js only when observation distance or spatial depth is meaningful |
+| `route` | `dom` or `canvas-enhanced` | use Three.js only when terrain, height, or distance is meaningful |
+| `labyrinth` | `dom` | typography must remain the maze; avoid 3D game conversion |

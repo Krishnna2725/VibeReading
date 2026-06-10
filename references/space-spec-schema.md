@@ -11,6 +11,14 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
     "fit": "",
     "secondary": ""
   },
+  "rendering": {
+    "mode": "dom|canvas-enhanced|three-diegetic",
+    "rationale": "",
+    "threeWorldAction": "",
+    "domSemanticSurface": "",
+    "fallbackMode": "dom|canvas-enhanced",
+    "performanceBudget": ""
+  },
   "artDirection": {
     "conceptImage": "concept-image.png",
     "conceptPrompt": "",
