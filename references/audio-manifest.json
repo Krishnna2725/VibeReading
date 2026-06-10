@@ -1,0 +1,133 @@
+{
+  "bgm": [
+    {
+      "id": "bgm",
+      "label": "BGM",
+      "file": "bgm.mp3",
+      "mood": ["定制", "纯音乐", "氛围"],
+      "note": "由 MiniMax music-2.6-free 根据书籍气质生成，进入页面后自动播放"
+    }
+  ],
+  "nature": [
+    {
+      "id": "soft-wind",
+      "label": "微风",
+      "file": "nature/soft-wind.mp3",
+      "mood": ["平静", "户外", "微风"]
+    },
+    {
+      "id": "distant-breeze",
+      "label": "远风",
+      "file": "nature/distant-breeze.mp3",
+      "mood": ["开阔", "干燥", "风"]
+    },
+    {
+      "id": "birds",
+      "label": "鸟鸣",
+      "file": "nature/birds.mp3",
+      "mood": ["清晨", "自然", "鸟鸣"]
+    },
+    {
+      "id": "forest-wind-with-birds",
+      "label": "林间风与鸟",
+      "file": "nature/forest-wind-with-birds-singing-364368.mp3",
+      "mood": ["森林", "生机", "微风"]
+    },
+    {
+      "id": "night-sound-in-village-field",
+      "label": "村野夜声",
+      "file": "nature/night-sound-in-village-field.mp3",
+      "mood": ["夜晚", "乡村", "虫鸣"]
+    },
+    {
+      "id": "lake-wavelet",
+      "label": "湖面微波",
+      "file": "nature/lake-wavelet.mp3",
+      "mood": ["湖水", "平静", "水声"]
+    },
+    {
+      "id": "sea-and-seagull-wave",
+      "label": "海浪与海鸥",
+      "file": "nature/sea-and-seagull-wave.mp3",
+      "mood": ["大海", "开阔", "海浪"]
+    },
+    {
+      "id": "mountain-stream",
+      "label": "山溪水声",
+      "file": "nature/the-sound-of-a-mountain-stream-_nature-sound-201930.mp3",
+      "mood": ["山溪", "流动", "水声"]
+    },
+    {
+      "id": "windstorm",
+      "label": "风暴",
+      "file": "nature/Windstorm Ambience.mp3",
+      "mood": ["风暴", "强劲", "风"]
+    },
+    {
+      "id": "thunder-freight",
+      "label": "雷声与远处火车",
+      "file": "nature/rolling-thunder-amp-freight-train-in-the-rain-field-recording-353729.mp3",
+      "mood": ["雷声", "雨", "远处火车"]
+    },
+    {
+      "id": "drizzle",
+      "label": "细雨",
+      "file": "nature/Drizzle.mp3",
+      "mood": ["细雨", "柔和", "雨声"]
+    },
+    {
+      "id": "moderate-rain",
+      "label": "中雨",
+      "file": "nature/Moderate rain.mp3",
+      "mood": ["中雨", "雨声", "平静"]
+    }
+  ],
+  "ui": [
+    {
+      "id": "ui-click",
+      "label": "点击声",
+      "file": "ui/ui-click-43196.mp3",
+      "mood": ["交互", "点击", "UI"],
+      "type": "sfx"
+    }
+  ],
+  "indoor": [
+    {
+      "id": "book-turn-page",
+      "label": "翻书声",
+      "file": "indoor/book-turn-page.mp3",
+      "mood": ["阅读", "纸页", "安静"],
+      "type": "sfx"
+    },
+    {
+      "id": "a-small-library",
+      "label": "小图书馆",
+      "file": "indoor/a-small-library.mp3",
+      "mood": ["图书馆", "安静", "室内"]
+    },
+    {
+      "id": "cafe-ambience",
+      "label": "咖啡馆人声",
+      "file": "indoor/people-talking-at-cafe-ambience-6159.mp3",
+      "mood": ["咖啡馆", "人声", "室内"]
+    },
+    {
+      "id": "fireplace-crackling",
+      "label": "壁炉噼啪",
+      "file": "indoor/burning-fireplace-crackling-fire-soundswav.mp3",
+      "mood": ["壁炉", "温暖", "室内"]
+    },
+    {
+      "id": "city-apartment",
+      "label": "城市公寓",
+      "file": "indoor/city-apartment.mp3",
+      "mood": ["城市", "公寓", "背景"]
+    },
+    {
+      "id": "rain-on-the-window",
+      "label": "窗上雨声",
+      "file": "indoor/rain-on-the-window-114709.mp3",
+      "mood": ["窗边", "雨声", "室内"]
+    }
+  ]
+}
