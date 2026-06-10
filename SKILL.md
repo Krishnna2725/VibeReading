@@ -57,7 +57,7 @@ Follow this order. Do not load every reference at once. Use progressive disclosu
     persistent, visible, low-distraction weather effect chosen for the book.
 11. Generate vibereading-skill/output/[run-folder]/index.html, style.css, and app.js with Prompt 2 → validate.
 12. Copy referenced audio files from assets/audio/ to vibereading-skill/output/[run-folder]/assets/audio/.
-13. Do a quick browser smoke scan: inspect the initial state, perform the selected template's core action, dismiss any opened overlay/backdrop if present, and reach the sustained reading mode.
+13. Do a quick browser smoke scan: inspect the initial situation, perform the selected template's signature relational action, dismiss any opened overlay/backdrop if present, and reach the sustained reading capability.
 14. Tell user the output path and one sentence describing the space.
 ```
 
@@ -150,11 +150,12 @@ Entry / Exploration / Companion 是最低协议状态，不是固定三幕叙事
 - 让 `artDirection.imageRole` 与已选模板的 Image Role 对齐：这张概念图在前端里是世界层、物理表面、舞台空间，还是纹理/碎片来源；`frontendUse` 写明它如何进入 HTML/CSS。
 - `atmosphericEngine` 说明持续存在的空间天气：光、影、纹理、粒子/线条、景深、环境运动。每次生成必须实现至少一种持续、可见、低干扰的天气效果；不得只用颜色或音频冒充天气。
 - `sceneChoreography` 说明状态之间如何通过模糊、缩放、残影、换光、层移、显影推进；至少包含 entry、exploration、companion 三个协议 id，但这些 id 只代表功能阶段，表层节奏应按模板扩展为 4-8 个状态。
-- initial state 只保留一个主导邀请；它可以是窗口、桌面封口、牌堆、仪器、灯位、房间物件、文字走廊、路线标记或其他模板定义的入口。
+- initial state 只保留一个主导情境或动作，不要求标题式开场邀请。它可以直接从一个异常、半完成的牌阵、正在失真的信号、已驶过一站的路线或需要接手的动作中开始。
+- `interaction.signatureMechanic` 定义本模板不可替代的核心玩法拓扑、用户动作、状态变化、完成条件，以及它如何变形成 Companion。不能只写“点击物件并揭示内容”。
 - `interaction.interactionAnchors` 提供 2 到 5 个模板原生 affordances；它们可以是物件、区域、信号、卡牌、仪表、停靠点、光位、声音、文字块或持续操作，不必统一表现为按钮物件。
-- interaction anchors 必须体现所选模板的主动作，例如看天气、开档案、抽牌、调频/扫描、布光、触摸物件、沿文字转向、停靠路线；不要退化成通用信息卡或同一套浮动按钮。
+- interaction anchors 必须体现所选模板的主动作，并通过 `interaction.relations` 形成依赖、组合、对照、顺序、路径或连续调节关系。禁止所有锚点互不相关、各自点击后独立弹出内容。
 - Atmosphere 至少包含一个手动光照、声音、天气或色调切换，具体形态由模板决定。
-- Companion / sustained reading mode 是低干扰阅读能力，不是固定 dashboard 或固定侧栏；它的出现时机和形状服从模板，可最终出现、周期返回、阈值显现，或作为日志/便签逐渐长出。
+- Companion / sustained reading mode 是低干扰阅读能力，不是固定 dashboard、固定侧栏或统一的最终面板。它必须由 `signatureMechanic.companionTransformation` 从核心机制变形长出；计时、阶段、声音、笔记等能力可以分散在世界物件中，不要求同处一个容器。
 - 阅读进度统一用 `reading.stages`，不要另拆 `chapters`；stage 由原书气质和阅读姿态生成，而不是机械复刻目录。
 - 每个 stage 必须有清晰序号、短标签、副标题/脚注、灯光、声音和阅读提示；副标题/脚注说明这一部分的主旨以及它如何联动环境。
 - `avoid` 写出这本书最容易滑向的幼稚化、套路化、网页化错误。
@@ -232,9 +233,10 @@ BGM Meta，只有当 `status` 为 `generated` 且 `file` 为 `./assets/audio/bgm
 - 至少三种协议状态 `entry` / `exploration` / `companion` 必须可发现。表层流程按选中模板的 progression mechanic 和 companion reveal rule 实现。
 - 先实现 persistent atmospheric engine，再实现内容层；atmospheric engine 必须贯穿所有状态。
 - 若 visual-brief.json 允许使用 `concept-image.png`，必须按模板 Image Role 使用它：作为世界层、物理表面、舞台空间或局部纹理；不要把图片当普通网页背景再贴通用控件。
-- Initial state 只保留一个主导邀请，不同时展示完整控制面板、阶段条、碎片列表、笔记框。
+- Initial state 只保留一个主导情境或动作，不同时展示完整控制面板、阶段条、碎片列表、笔记框。禁止默认制作“点击进入 / 开始探索”的标题门厅；Entry 可以让用户直接接手世界中已经发生的事情。
+- 必须实现 SpaceSpec 的 `signatureMechanic` 与 `relations`。交互锚点不能只是若干独立点击入口；至少一次推进必须依赖两个锚点之间的关系、顺序、组合或连续状态。
 - 必须有手动氛围切换，表现为世界内部 affordance，而不是设置项。
-- Companion 必须提供这些能力：阅读计时器（带暂停/继续 + 重置）、stage 切换、环境声音、灯光/氛围切换、localStorage 笔记、边注保存（调用 `VibeReadingNoteShare.saveMarkdown()`，完成后用轻量 toast 反馈）、专注模式、返回探索入口。
+- Companion 必须提供这些能力：阅读计时器（带暂停/继续 + 重置）、stage 切换、环境声音、灯光/氛围切换、localStorage 笔记、边注保存（调用 `VibeReadingNoteShare.saveMarkdown()`，完成后用轻量 toast 反馈）、专注模式、返回探索入口。这些是功能要求，不是布局要求；禁止默认把它们收拢成一个 Companion 面板。
 - 计时器必须有暂停/继续和重置控件，不可仅为被动展示。
 - 若 BGM Meta 的 `status` 为 `generated`，必须提供定制 BGM 播放功能：引用 `./assets/audio/bgm.mp3`，在首次用户交互后尝试播放，Companion 模式内提供 BGM 开关按钮，与背景氛围声并列。
 
@@ -286,6 +288,7 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 - `sceneChoreography.sceneStates` and `interaction.acts` both include exact ids `entry`, `exploration`, and `companion`.
   Expanded template states may add extra ids, but must not replace or rename these three standard states.
 - `interaction.interactionAnchors` has 2-5 items, each with `kind`, `worldRole`, `affordance`, `action`, `reveals`, `surfaceBehavior`, and `spatialIntegration`.
+- `interaction.signatureMechanic` is fully specified and is not a generic click-to-reveal loop; `interaction.relations` contains at least one meaningful cross-anchor relationship.
 - `interaction.atmosphereControls` has ≥ 1 manual control.
 - `reading.stages` has 3-8 stages with ordinal + subtitle + light + sound + hint.
 - All audio file paths exist in `references/audio-manifest.json`.
@@ -311,7 +314,7 @@ Do not claim visual scan unless you inspected the rendered page in a browser and
 - Spatial transitions (not show/hide panels). Sustained reading mode is calm, not a dashboard, and its reveal rule follows the selected template.
 - Timer with pause/resume + reset, notes with Markdown export, stage switching, focus mode; placement and visual form follow the selected template.
 - If BGM status is `generated`, the Companion mode includes a working BGM toggle and starts playback only after a user gesture.
-- Browser smoke scan covers the selected template's core path: initial invitation → one active engagement action → dismiss any opened overlay/backdrop if present → sustained reading; text-bearing UI stays visible and manual atmosphere/tone controls visibly affect the room.
+- Browser smoke scan covers the selected template's signature path: initial situation → one relational/continuous/compositional action → observable world mutation → sustained reading capability; text-bearing UI stays visible and manual atmosphere/tone controls visibly affect the room.
 - Blur, fog, glass, scanline, weather, or memory-drift effects may soften atmosphere layers, but must not be inherited by readable text, buttons, timers, notes, or active detail chambers.
 - Semantic buttons, focus-visible states, 44px touch targets, reduced-motion fallback.
 - Mobile responsive (not just scaled-down desktop).

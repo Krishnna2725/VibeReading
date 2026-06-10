@@ -27,7 +27,8 @@ companion reveal rule
 frontend feasibility limits
 ```
 
-The shared protocol may still use a strong familiar rhythm, such as invitation -> engagement -> reading.
+The shared protocol does not prescribe a visible rhythm such as invitation -> engagement -> reading.
+Entry may begin mid-action; Companion may emerge by transforming the active surface instead of opening a new container.
 The template test is whether the reader's main action, image use, and sustained reading surface feel specific to the selected prototype.
 
 ## Selection Table
@@ -94,3 +95,18 @@ This table is only a post-selection implementation hint. It must never override 
 | `window` | `dom` or `canvas-enhanced` | use Three.js only when observation distance or spatial depth is meaningful |
 | `route` | `dom` or `canvas-enhanced` | use Three.js only when terrain, height, or distance is meaningful |
 | `labyrinth` | `dom` | typography must remain the maze; avoid 3D game conversion |
+
+## Signature Interaction Topology
+
+Templates must differ in interaction topology, not only in objects and visual styling.
+
+| template | signature topology | non-negotiable relation |
+| --- | --- | --- |
+| `window` | continuum / cyclical | weather, time, and attention continuously alter one view |
+| `archive` | network | evidence must contradict, corroborate, order, or reclassify other evidence |
+| `oracle` | combination | interpretation emerges from card placement and card-to-card relations |
+| `instrument` | continuum | tuning values continuously change signal clarity and reading state |
+| `rehearsal` | spatial-composition / sequence | cue order and light placement change the meaning of the same stage |
+| `vinyl` | cyclical / sequence | sleeve, side, needle position, and playback state form one ritual |
+| `labyrinth` | branching-path / cyclical | turning and rereading alter available text paths |
+| `route` | sequence / branching-path | stops and route choices change distance, weather, and later context |

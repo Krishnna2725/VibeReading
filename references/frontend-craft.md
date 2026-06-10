@@ -137,6 +137,22 @@ This is a layout rule, not a style preset.
 The template owns the creative interaction pattern.
 This file owns implementation discipline: accessibility, layering, responsive behavior, motion restraint, note export, timer controls, and QA.
 
+The selected template must also change the **interaction topology**, not merely the nouns:
+
+```text
+continuum           -> tune or regulate one changing system
+sequence            -> perform meaningful actions in a consequential order
+network             -> connect, compare, or contradict evidence
+combination         -> meaning emerges from an arrangement of elements
+spatial-composition -> position, light, or framing changes relationships
+branching-path      -> choices alter the route and make rereading meaningful
+cyclical            -> repeated passes reveal different layers
+```
+
+Independent click-to-reveal objects are not a sufficient exploration mechanic.
+At least one visible result must depend on a relation between two anchors, a meaningful sequence, a continuous value, or a changed spatial composition.
+Do not let every template converge on invitation screen -> object collection -> companion panel.
+
 ## Overlay & Panel Discipline
 
 All overlays, side panels, modals, micro-spaces, and full-screen transition layers must follow these rules:
@@ -153,7 +169,7 @@ The panel content element may `stopPropagation` / `e.stopPropagation()` so click
 If you use event delegation, bind panel buttons directly or resolve their actions before stopping propagation; panel buttons must not be trapped by the anti-bubble handler.
 Visible close buttons are optional. Use one only when it fits the visual language; if present, it must work.
 
-Exception: the initial Entry screen may be forward-only when the selected template explicitly defines a one-way threshold (e.g. ritual threshold crossing). Even then, the user must never feel trapped — after crossing they should see a clear path forward or a subtle retreat option.
+Exception: an Entry state may be forward-only when the selected template explicitly defines a one-way threshold. Entry does not need to be a separate title or invitation screen; prefer beginning inside an active situation when the template supports it. The user must never feel trapped.
 
 ### No Dead-End States
 
@@ -290,6 +306,7 @@ Spatial transforms may tilt, scale, or drift the world, but they must not push r
 ## Sustained Reading Craft
 
 Companion 的出现时机和视觉形态由选中模板的 Companion Reveal Rule 决定，frontend-craft 不做额外规定。
+Companion is a capability state, not a required container. Its controls may remain distributed across transformed world objects, and the exploration surface may itself settle into sustained reading.
 
 ### Timer
 
@@ -354,7 +371,7 @@ Do rain, particles, scanlines, and texture each read as their intended effect ra
 Is at least one visible weather effect continuously present, appropriate to the book, and quieter in Companion mode?
 Does a manual light/weather/tone switch visibly change the room, especially when its label implies night, lamp, dusk, or deep focus?
 Is there any large SVG prop that should instead be light, shadow, or material?
-Does the first screen feel like entering a book, not landing on a website?
+Does the first screen feel like encountering an active situation from the book, not landing on a website or repeating a generic title gateway?
 
 ### Overlay & Panel Checklist
 Does every overlay/panel have working backdrop-click dismissal?

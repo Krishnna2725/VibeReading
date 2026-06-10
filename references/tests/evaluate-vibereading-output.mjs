@@ -29,6 +29,25 @@ const validTemplates = new Set([
   "route"
 ]);
 const validRenderingModes = new Set(["dom", "canvas-enhanced", "three-diegetic"]);
+const validTopologies = new Set([
+  "continuum",
+  "sequence",
+  "network",
+  "combination",
+  "spatial-composition",
+  "branching-path",
+  "cyclical"
+]);
+const templateTopologies = {
+  window: new Set(["continuum", "cyclical"]),
+  archive: new Set(["network"]),
+  oracle: new Set(["combination"]),
+  instrument: new Set(["continuum"]),
+  rehearsal: new Set(["spatial-composition", "sequence"]),
+  vinyl: new Set(["cyclical", "sequence"]),
+  labyrinth: new Set(["branching-path", "cyclical"]),
+  route: new Set(["sequence", "branching-path"])
+};
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -197,6 +216,28 @@ function checkDir(dir) {
     ].filter(Boolean).map((term) => String(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     if (!new RegExp(weatherTerms.join("|"), "i").test(generatedCode)) {
       result.failures.push("generated code has no detectable visible weather implementation");
+    }
+    const signature = spec.interaction?.signatureMechanic || {};
+    const relations = spec.interaction?.relations || [];
+    result.metrics.signatureTopology = signature.topology || "";
+    result.metrics.relations = relations.length;
+    for (const field of ["name", "topology", "playerAction", "stateMutation", "completionCondition", "companionTransformation", "antiRepetitionRule"]) {
+      if (!signature[field]) result.failures.push(`space-spec interaction.signatureMechanic.${field} is required`);
+    }
+    if (signature.topology && !validTopologies.has(signature.topology)) {
+      result.failures.push(`space-spec signature topology must be one of ${[...validTopologies].join(", ")}`);
+    }
+    if (signature.topology && !templateTopologies[result.metrics.template]?.has(signature.topology)) {
+      result.failures.push(`space-spec signature topology ${signature.topology} does not fit template ${result.metrics.template}`);
+    }
+    if (relations.length < 1) {
+      result.failures.push("space-spec interaction.relations must include at least one cross-anchor relationship");
+    }
+    if (result.metrics.template === "archive" && relations.length < 2) {
+      result.failures.push("archive template requires at least two evidence relationships");
+    }
+    if (result.metrics.template === "archive" && !/contradict|corroborat|compare|sequence|timeline|infer|矛盾|印证|对照|排序|时间线|推断/i.test(JSON.stringify({ signature, relations }))) {
+      result.failures.push("archive signature mechanic must express evidence comparison, contradiction, sequencing, or inference");
     }
     result.metrics.sceneStates = spec.sceneChoreography?.sceneStates?.length || 0;
     result.metrics.stages = spec.reading?.stages?.length || 0;

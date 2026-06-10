@@ -87,6 +87,15 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
   },
   "interaction": {
     "mode": "non-scrolling spatial installation",
+    "signatureMechanic": {
+      "name": "",
+      "topology": "continuum|sequence|network|combination|spatial-composition|branching-path|cyclical",
+      "playerAction": "",
+      "stateMutation": "",
+      "completionCondition": "",
+      "companionTransformation": "",
+      "antiRepetitionRule": ""
+    },
     "acts": [
       {"id": "entry", "label": "开篇", "purpose": "", "visualState": "", "interactionGoal": ""},
       {"id": "exploration", "label": "探索", "purpose": "", "visualState": "", "interactionGoal": ""},
@@ -94,6 +103,9 @@ VibeReading SpaceSpec 的严格 JSON 输出结构。Prompt 1 生成时以此为�
     ],
     "interactionAnchors": [
       {"id": "", "label": "", "kind": "object|region|dialogue|card|dial|stop|light|signal|text|gesture", "worldRole": "", "affordance": "", "action": "", "reveals": "", "surfaceBehavior": "", "spatialIntegration": ""}
+    ],
+    "relations": [
+      {"from": "", "to": "", "rule": "", "feedback": "", "changes": ""}
     ],
     "atmosphereControls": [
       {"id": "", "label": "", "type": "light|sound|weather|tone", "worldRole": "", "states": []}
