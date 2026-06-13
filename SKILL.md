@@ -47,8 +47,7 @@ BGM 步骤： references/music-generation.md
 2. 搜索足够可靠的背景信息，理解主题与氛围，但不剧透关键转折。
 3. 读取 `references/template-index.md`，选择恰好一个模板。
 4. 仅读取选中模板。模板中的机制、视觉语法、图像角色、天气倾向、阅读表面与实现说明优先于通用习惯。
-5. 按模板的图像角色生成 `concept-image.png`；无法生图时写入 `concept-prompt.md`。
-6. 读取 `references/space-spec-schema.md`，生成精简的 `space-spec.json`。
+5. 读取 `references/space-spec-schema.md`，生成精简的 `space-spec.json`。
 7. 读取 `references/audio-manifest.json`，只选择页面实际使用的音频。
 8. 读取 `references/music-generation.md`，启动纯音乐 BGM 生成并写入 `bgm-meta.json`。
 9. 生成 `index.html`、`style.css` 与 `app.js`。
@@ -67,7 +66,6 @@ vibereading-skill/output/[YYYY-MM-DD-《书名》-测试目的]/
 ├── space-spec.json
 ├── bgm-meta.json
 ├── concept-image.png
-├── concept-prompt.md        # 仅生图不可用时
 └── assets/
     ├── note-share-export.js # 仅选择笔记工具时
     └── audio/
