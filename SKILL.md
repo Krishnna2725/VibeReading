@@ -2,7 +2,7 @@
 name: vibereading
 description: >
   为书籍生成 16:9 阅读陪伴网页。每次阅读从一段有声音的短暂入静开始，
-  随后进入由主视觉、单首纯音乐 BGM、天气、四个阅读阶段和模板专属陪伴组件构成的空间。
+  随后进入由主视觉、单首纯音乐 BGM、天气、基于目录划分的阅读阶段和模板专属陪伴组件构成的空间。
 ---
 
 # VibeReading V2
@@ -15,11 +15,10 @@ description: >
 每次输出必须具备：
 
 - 一个从 `window`、`vinyl`、`instrument`、`route`、`symbols` 中选择的模板；
-- 面向未读者、无剧透的读前坐标；
 - 每次刷新后重新出现的入静首页；
 - 用户点击“开始”后立即出现的 BGM 或环境音；
 - 一首严格纯音乐 BGM，以及 BGM 失败时的环境音兜底；
-- 四个可手动切换的阅读阶段；
+- AI 主动检索目录后，按章节进度聚合出的 3–6 个可手动切换阶段；
 - 持续、克制、可调强度的天气或氛围效果；
 - 模板专属陪伴组件；
 - 阅读计时与番茄钟；
@@ -56,10 +55,10 @@ description: >
 ## 工作流
 
 1. 获取书名与可选作者名。
-2. 搜索足够可靠的背景信息，只理解主题、气质与阅读难点，不剧透。
-3. 生成读前坐标：`world`、`concern`、`notice`、`permission`。
+2. 搜索足够可靠的背景信息与目录；目录过长时提取章节顺序、篇幅分布和结构转折。
+3. 为未读者设计无剧透入静引导，帮助读者进入本书，不单独生成额外理解框架。
 4. 读取 `template-index.md`，选择恰好一个模板。
-5. 仅读取选中模板，定义书籍身份与四个阅读阶段。
+5. 仅读取选中模板；根据目录与章节进度聚合 3–6 个阅读阶段，并定义书籍身份。
 6. 读取 `space-spec-schema.md`，生成 `space-spec.json`。
 7. 读取 `music-generation.md`，异步启动一首纯音乐 BGM。
 8. 读取 `image-generation.md`，生成一张主图；仅 Window 可基于母图生成最多三张变化图。
@@ -67,7 +66,7 @@ description: >
 10. 加载共享运行时与模板专属陪伴组件骨架。
 11. 生成 `index.html`、`style.css`、`app.js`。
 12. 复制实际引用的图片与音频。
-13. 运行轻量校验，确认文件齐全、JSON 与 JavaScript 可解析、资源路径存在；有条件时在浏览器中做一次打开与开始按钮冒烟测试。
+13. 运行一次纯代码集成校验，检查入静、声音、阶段切换、计时、番茄钟、双击运行约束与显示比例。
 
 ## 输出结构
 
@@ -98,13 +97,14 @@ HTML、CSS 与 JS 必须拆分。关键配置必须内联到 `app.js` 或 HTML�
 visualMotif, musicDirection, textVoice, motionCharacter, uiLanguage, avoid
 ```
 
-再定义四个阶段各自的：
+再根据真实目录和章节进度，定义 3–6 个阶段各自的：
 
 ```text
-label, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
+label, sourceRange, chapters, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
 ```
 
-四个阶段必须有可感知变化，但仍属于同一本书。
+阶段数量由 AI 根据目录结构主动决定，下限 3 个、上限 6 个。章节较多时应按结构转折和阅读进度聚合，不得用纯情绪阶段替代目录依据。
+各阶段必须有可感知变化，但仍属于同一本书；提示无剧透，不解释后续剧情。
 除 Window 外，阶段通常复用同一张主图，通过天气、光线、环境声、文字、动画和局部 UI 表达变化。
 
 ## 一级能力
@@ -114,7 +114,7 @@ label, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
 - 重新开始入静引导；
 - 天气强度：关闭 / 低 / 中；
 - 声音播放 / 暂停 / 音量；
-- 四阶段切换；
+- 3–6 个目录阶段切换；
 - 阅读计时：暂停 / 继续 / 重置；
 - 25 分钟番茄钟。
 
@@ -147,6 +147,6 @@ label, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
 - `app.js` 无语法错误；
 - HTML 正确加载 CSS 与 JS；
 - HTML 引用的本地资源存在；
-- 有浏览器工具时，打开页面并点击一次开始按钮，确认没有立即报错。
+- 运行纯代码集成校验，确认入静、声音、阶段切换、计时、番茄钟、双击运行约束与显示比例均可用。
 
-书籍贴合度、画面气质、阶段表达和模板个性属于产品验收，不属于每次生成任务的自动校验。
+书籍贴合度、画面气质和美术调参交给人类用户判断，不属于自动校验。

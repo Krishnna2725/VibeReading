@@ -23,7 +23,7 @@
 - 封套与 label；
 - 书籍专属硬件材质、色彩和铭牌；
 - 落针、旋转和声音反馈；
-- 四阶段 Liner Notes、灯光、天气与文字。
+- 各目录阶段的 Liner Notes、灯光、天气与文字。
 
 ## Visual Preset
 
@@ -47,9 +47,9 @@
 Power / Start   开始入静与声音授权
 Weather         天气强度
 Volume          声音
-Stage           四阶段
+Stage           3–6 个目录阶段
 Timer           阅读计时与番茄钟
-Liner Notes     读前坐标与阶段文字
+Liner Notes     入静与阶段文字
 ```
 
 ## Entry Guide Behavior
@@ -58,7 +58,7 @@ Liner Notes     读前坐标与阶段文字
 
 ## Stage Expression
 
-四阶段不更换 BGM。通过 Liner Notes、灯光、天气、文字、材质状态和唱机反馈表达变化。
+阶段切换不更换 BGM。通过 Liner Notes、灯光、天气、文字、材质状态和唱机反馈表达变化。
 
 ## Forbidden
 
@@ -73,4 +73,4 @@ Liner Notes     读前坐标与阶段文字
 - 用户一眼理解唱机与播放；
 - 点击开始后立即有声音；
 - 唱片与唱臂反馈清楚；
-- 四阶段可切换，但始终是一台唱机与一首 BGM。
+- 目录阶段可切换，但始终是一台唱机与一首 BGM。

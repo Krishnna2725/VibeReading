@@ -1,6 +1,6 @@
 # VibeReading Skill
 
-VibeReading 将一本书转译成一个低干扰、可持续停留的阅读陪伴页面。它不复述剧情，也不把阅读做成解谜游戏；它用短暂的读前入静、书籍专属画面、天气、声音和四个阅读阶段，帮助读者进入并保持阅读状态。
+VibeReading 将一本书转译成一个低干扰、可持续停留的阅读陪伴页面。它不复述剧情，也不把阅读做成解谜游戏；它用短暂的读前入静、书籍专属画面、天气、声音和基于目录划分的阅读阶段，帮助读者进入并保持阅读状态。
 
 ## V2 产品边界
 
@@ -9,7 +9,7 @@ VibeReading 将一本书转译成一个低干扰、可持续停留的阅读陪�
 - 每次刷新都会回到首页，并重新进行 15–25 秒读前入静；
 - 用户点击开始后立即播放声音，优先播放全书唯一一首纯音乐 BGM，失败时使用环境音兜底；
 - 持续可见且可调节的天气效果；
-- 精确四个阅读阶段；
+- AI 主动检索目录后，按章节进度聚合出的 3–6 个阅读阶段；
 - 阅读计时器；
 - 25 分钟番茄钟。
 
@@ -82,8 +82,8 @@ output/YYYY-MM-DD-《书名》-测试目的/
 
 ```bash
 node --check runtime/v2-runtime.js
-node --test references/tests/note-share-export.test.js
+node --test references/tests/note-share-export.test.js references/tests/v2-runtime-contract.test.js references/tests/output-evaluator.test.js
 node references/tests/evaluate-vibereading-output.mjs output/<目录>
 ```
 
-输出校验器只检查运行底线，不要求生成 Agent 自评审美或内容质量。正式产品验收标准见 `V2版更新计划.md`。
+输出校验器以纯代码方式检查入静、声音、阶段切换、计时、番茄钟、双击运行和显示比例，不要求 Agent 自评审美或进行浏览器、多模态检查。正式产品要求见 `V2版更新计划.md`。

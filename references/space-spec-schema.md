@@ -12,12 +12,6 @@
     "primary": "window|vinyl|instrument|route|symbols",
     "reason": ""
   },
-  "readingCoordinate": {
-    "world": "",
-    "concern": "",
-    "notice": "",
-    "permission": ""
-  },
   "bookDirection": {
     "visualMotif": "",
     "musicDirection": "",
@@ -29,10 +23,7 @@
   "entryGuide": {
     "durationSec": 20,
     "steps": [
-      {"id": "settle", "text": "", "visual": "", "audio": ""},
-      {"id": "orient", "text": "", "visual": "", "audio": ""},
-      {"id": "attune", "text": "", "visual": "", "audio": ""},
-      {"id": "begin", "text": "", "visual": "", "audio": ""}
+      {"id": "", "text": "", "visual": "", "audio": ""}
     ],
     "skipControl": true,
     "soundRequiredAfterStart": true
@@ -54,6 +45,8 @@
     {
       "id": "",
       "label": "",
+      "sourceRange": "",
+      "chapters": [],
       "readingHint": "",
       "floatingTexts": [],
       "weather": "",
@@ -88,11 +81,12 @@
 
 规则：
 
-- `readingCoordinate` 四项完整，总字数不超过 180 个汉字。
-- `entryGuide.steps` 精确包含 `settle`、`orient`、`attune`、`begin`。
+- `entryGuide` 同时承担读前介绍，不再生成独立的额外理解框架。
+- `entryGuide.steps` 数量与结构由 AI 根据书籍决定；全部文字建议 60–160 个汉字。
 - `entryGuide.durationSec` 为 15–25 秒。
 - `soundRequiredAfterStart` 必须为 `true`。
-- `stages` 精确包含四项。
+- `stages` 必须包含 3–6 项，由 AI 主动检索目录并按章节进度聚合。
+- 每个阶段必须填写 `sourceRange` 和 `chapters`，不得使用纯情绪阶段替代目录依据。
 - 每个阶段至少有 2 条 `floatingTexts`。
 - 只有 `window` 可填写 `windowVariations`，最多三项。
 - `audio.isInstrumental` 必须为 `true`。
