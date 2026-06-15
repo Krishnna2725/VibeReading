@@ -1,63 +1,59 @@
-# BGM 生成
+# 单首 BGM 生成
 
-使用 MiniMax `music-2.6-free` 生成严格的纯音乐 BGM，不得包含歌词或人声。国内接口不使用代理。该免费接口的生成时间较长，大部分时候超时并不意味着任务失败。
+每本书只生成一首严格纯音乐 BGM。
+BGM 是入静引导与阅读陪伴的核心声音，不是可选赠品。
 
-每次请求必须包含 `"is_instrumental": true`。
-提示词不得要求歌唱、朗诵、吟唱、歌词、人声垫底或 vocal pads。
+## 请求要求
 
-## 前置条件
+每次请求必须包含：
 
-- 环境变量中必须存在 `MINIMAX_API_KEY`。
-- 如果未配置，跳过生成，并将 `bgm-meta.json` 的 `status` 写为 `"skipped"`。
+```json
+"is_instrumental": true
+```
 
-## 异步工作流
-
-免费模型实测约需 120-150 秒。不要同步干等：
+Prompt 必须使用英文，并在结尾明确：
 
 ```text
-1. 完成 space-spec.json 后，后台发起 BGM 请求。
-2. 继续生成 HTML、CSS 和 JS。
-3. 暂时写入 bgm-meta.json，status 为 "pending"。
-4. 其他工作结束后检查响应。
-5. 成功则下载 mp3；超过 180 秒则写为 "failed"。
-6. 无论 BGM 是否成功，页面都必须能使用普通环境音运行。
+Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.
 ```
 
-## API 请求
+不得要求歌唱、朗诵、吟唱、人声垫底或 vocal pads。
 
-```bash
-curl -s -X POST "https://api.minimaxi.com/v1/music_generation" \
-  -H "Authorization: Bearer $MINIMAX_API_KEY" \
-  -H "Content-Type: application/json" \
-  --max-time 300 \
-  -d '{
-    "model": "music-2.6-free",
-    "prompt": "<BGM_PROMPT>",
-    "is_instrumental": true,
-    "output_format": "url",
-    "audio_setting": { "sample_rate": 44100, "bitrate": 256000, "format": "mp3" }
-  }' > output/[run-folder]/bgm_response.json &
-```
+## Prompt 内容
 
-响应中的 `data.audio` 是下载地址，`data.status` 为 `2` 时表示完成：
+描述：
 
-```bash
-curl -L -o "output/[run-folder]/assets/audio/bgm.mp3" "<data.audio>"
-```
+- 书籍气质与核心张力；
+- 适合阅读的速度和动态；
+- 主要与次要乐器；
+- 声音距离与空间感；
+- 与天气和模板空间的关系；
+- 循环友好、克制、不抢注意力。
 
-## 提示词
+## 工作流
 
-根据 SpaceSpec 中的核心张力、主导意象、空间天气和情绪生成。
-描述情绪、场景、速度、乐器与动态，不要只写音乐类型。
-提示词使用英文，并在结尾附加：
+1. 完成 SpaceSpec 后异步启动 BGM 生成。
+2. 同时继续生成页面。
+3. 生成成功后写入 `assets/audio/bgm.mp3`。
+4. 最终写入 `bgm-meta.json`。
+5. 失败时写入 `failed` 或 `skipped`，页面使用环境音兜底。
+
+最终状态只能为：
 
 ```text
-必须是纯音乐：不得包含人声、演唱、口白或歌词。
+generated, skipped, failed
 ```
 
-示例：
+不得交付 `pending`。
 
-> Cinematic, melancholic reading atmosphere, slow tempo, cold yet immersive, sparse piano, bowed strings, distant resonant percussion, restrained dynamics, suitable for introspective reading. Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.
+## 播放规则
+
+- 页面加载时展示入静首页；
+- 用户点击开始后立即尝试播放 `./assets/audio/bgm.mp3`；
+- BGM 不可用时立即播放环境音；
+- 不依赖 `fetch()` 元数据后才发现 BGM；
+- 全书只引用一条 BGM；
+- BGM 可与低音量环境音同时存在。
 
 ## bgm-meta.json
 
@@ -70,6 +66,3 @@ curl -L -o "output/[run-folder]/assets/audio/bgm.mp3" "<data.audio>"
   "reason": ""
 }
 ```
-
-`status` 可为 `generated`、`pending`、`skipped` 或 `failed`。
-API 失败时写入 `failed` 并继续工作，不得阻塞页面生成。

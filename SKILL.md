@@ -1,162 +1,152 @@
 ---
 name: vibereading
 description: >
-  为书籍生成沉浸式、非滚动的阅读陪伴网页。
-  当用户要求文学氛围页、阅读空间或沉浸式阅读陪伴时使用。
+  为书籍生成 16:9 阅读陪伴网页。每次阅读从一段有声音的短暂入静开始，
+  随后进入由主视觉、单首纯音乐 BGM、天气、四个阅读阶段和模板专属陪伴组件构成的空间。
 ---
 
-# VibeReading
+# VibeReading V2
 
-从一本书的精神气质中生成象征性的数字空间。
-它不是摘要、落地页、仪表盘、电子书阅读器或通用笔记应用。
+为一本书生成安静、个性化、可长期停留的阅读陪伴空间。
+它不是剧情导览、复杂互动装置、解谜游戏、电子书阅读器或生产力仪表盘。
 
-## 精简通用契约
+## 核心契约
 
 每次输出必须具备：
 
-- 固定视口的空间体验；
-- 一个由模板定义的签名机制；
-- 状态模型中包含精确协议 ID：`entry`、`exploration`、`companion`；
-- 至少一种持续可见、低干扰的天气效果；
-- 从签名机制自然变形而来的持续阅读能力；
-- 响应式、键盘可操作，并支持减少动态效果。
+- 一个从 `window`、`vinyl`、`instrument`、`route`、`symbols` 中选择的模板；
+- 面向未读者、无剧透的读前坐标；
+- 每次刷新后重新出现的入静首页；
+- 用户点击“开始”后立即出现的 BGM 或环境音；
+- 一首严格纯音乐 BGM，以及 BGM 失败时的环境音兜底；
+- 四个可手动切换的阅读阶段；
+- 持续、克制、可调强度的天气或氛围效果；
+- 模板专属陪伴组件；
+- 阅读计时与番茄钟；
+- 16:9 首屏完整呈现；
+- `file://` 双击可用、键盘可操作，并支持减少动态效果。
 
-这些是能力要求，不是固定的可见流程。
-不要把“标题开场 → 独立物件集合 → Companion 面板”当作所有书籍的默认答案；当它确实符合书籍气质与模板机制时，仍可使用。
+浏览器通常禁止零操作有声自动播放。因此“默认播放 BGM”的实现方式统一为：
+
+```text
+页面加载 → 入静首页 → 用户点击开始 → 立即播放 BGM；失败则立即播放环境音
+```
+
+入静引导期间不得无声。
 
 ## 上下文预算
 
-只读取当前步骤真正需要的文档：
+只读取当前步骤需要的文件：
 
 ```text
 始终读取：  SKILL.md
 选择模板：  references/template-index.md
 设计实现：  仅 references/templates/[selected].md
 生成规格：  references/space-spec-schema.md
+入静引导：  references/entry-guide.md
+陪伴组件：  references/companion-components.md
+生成图片：  references/image-generation.md
 选择音频：  references/audio-manifest.json
-BGM 步骤： references/music-generation.md
-可选参考：  仅在需要实现指导时读取 references/effects-recipes.md
+生成 BGM： references/music-generation.md
+可选天气：  references/effects-recipes.md
 ```
 
-除非用户要求混合模板，否则不得读取其他模板。
-生成过程中不要读取 `references/tests/`。
+不得读取未选中的模板，不得读取 Git 历史中的旧模板，生成过程中不要读取 `references/tests/`。
 
 ## 工作流
 
 1. 获取书名与可选作者名。
-2. 搜索足够可靠的背景信息，理解主题与氛围，但不剧透关键转折。
-3. 读取 `references/template-index.md`，选择恰好一个模板。
-4. 仅读取选中模板。模板中的机制、视觉语法、图像角色、天气倾向、阅读表面与实现说明优先于通用习惯。
-5. 读取 `references/space-spec-schema.md`，生成精简的 `space-spec.json`。
-7. 读取 `references/audio-manifest.json`，只选择页面实际使用的音频。
-8. 读取 `references/music-generation.md`，启动纯音乐 BGM 生成并写入 `bgm-meta.json`。
-9. 生成 `index.html`、`style.css` 与 `app.js`。
-10. 复制实际引用的音频；仅当选择了笔记工具时复制 `references/note-share-export.js`。
-11. 校验文件，并在浏览器中实测签名动作与持续阅读能力。
+2. 搜索足够可靠的背景信息，只理解主题、气质与阅读难点，不剧透。
+3. 生成读前坐标：`world`、`concern`、`notice`、`permission`。
+4. 读取 `template-index.md`，选择恰好一个模板。
+5. 仅读取选中模板，定义书籍身份与四个阅读阶段。
+6. 读取 `space-spec-schema.md`，生成 `space-spec.json`。
+7. 读取 `music-generation.md`，异步启动一首纯音乐 BGM。
+8. 读取 `image-generation.md`，生成一张主图；仅 Window 可基于母图生成最多三张变化图。
+9. 读取音频清单，选择必要环境音作为氛围与 BGM 失败兜底。
+10. 加载共享运行时与模板专属陪伴组件骨架。
+11. 生成 `index.html`、`style.css`、`app.js`。
+12. 复制实际引用的图片与音频。
+13. 运行轻量校验，确认文件齐全、JSON 与 JavaScript 可解析、资源路径存在；有条件时在浏览器中做一次打开与开始按钮冒烟测试。
 
 ## 输出结构
 
-新任务写入：
-
 ```text
-vibereading-skill/output/[YYYY-MM-DD-《书名》-测试目的]/
+output/[YYYY-MM-DD-《书名》-测试目的]/
 ├── index.html
 ├── style.css
 ├── app.js
 ├── space-spec.json
 ├── bgm-meta.json
 ├── concept-image.png
+├── stage-2.png               # 仅 Window 按需生成
+├── stage-3.png               # 仅 Window 按需生成
+├── stage-4.png               # 仅 Window 按需生成
 └── assets/
-    ├── note-share-export.js # 仅选择笔记工具时
     └── audio/
+        ├── bgm.mp3
+        └── ...
 ```
 
-HTML、CSS 与 JS 必须拆分，页面应能作为静态站点运行。
+HTML、CSS 与 JS 必须拆分。关键配置必须内联到 `app.js` 或 HTML，不得依赖 `fetch()` 本地 JSON。
 
-## 概念图
+## 书籍身份与阶段
 
-模板决定概念图是世界层、物理表面、舞台空间还是纹理来源。
-
-概念图提示词应：
-
-- 遵循选中模板的构图要求；
-- 捕捉书籍的核心张力、主导意象、光线、材质、色彩与空间深度；
-- 保留可用的负空间；
-- 不包含可读文字、UI、Logo、导航、面板或封面式构图；
-- 避免幼稚插画、直白剪贴画、通用奇幻/游戏界面和 SaaS 美学。
-
-概念图用于稳定审美方向。不要在图片上粘贴通用控件。
-将它的光、材质、色彩与深度转译到 `space-spec.json` 和 CSS 中。
-
-## SpaceSpec
-
-`space-spec.json` 是设计决策记录，不是内容资料堆。
-每个值都必须具体到足以改变最终实现。
-
-它需要定义：
-
-- 书籍精神与空间隐喻；
-- 选中模板及其适配原因；
-- 精简视觉系统与概念图用法；
-- 签名机制、拓扑关系、完成条件与 Companion 变形；
-- 初始情境与协议状态；
-- 持续天气；
-- 选中的阅读工具与音频；
-- 渲染模式与降级方式。
-
-签名机制不能是通用的点击揭示。
-至少一个可见结果必须依赖关系、顺序、连续数值、空间编排、路径分支或重复经过。
-
-## 实现契约
-
-优先遵循选中模板。所有模板共同遵守：
-
-- 先建立活着的空间，再放置内容。
-- 使用 CSS 变量统一色彩、材质、阴影、光与动态。
-- 可读文字保留在 DOM；氛围可使用 CSS、Canvas 或 Three.js。
-- 使用语义化控件、可见焦点、舒适触摸区域；关键操作不能只靠悬停。
-- 移动端应改变交互方式，而不是简单缩小桌面版。
-- 天气在各状态持续存在，并在持续阅读时变得更安静。
-- Entry 可以从动作进行到一半时开始，不要求欢迎页。
-- Companion 是能力状态，不是必须出现的容器。
-
-### 阅读工具
-
-根据模板选择 2-4 项：
+先定义整本书共享的：
 
 ```text
-notes, timer, stage-navigation, focus, ambience-control
+visualMotif, musicDirection, textVoice, motionCharacter, uiLanguage, avoid
 ```
 
-将它们嵌入模板原生物件，不要集中到通用面板。
-选择 `notes` 时，使用本地存储并调用 `VibeReadingNoteShare.saveMarkdown()` 导出 Markdown。
-选择 `timer` 时，必须提供暂停/继续与重置。
-BGM 生成成功时，只能在用户交互后播放，并提供符合世界语法的开关。
+再定义四个阶段各自的：
 
-### Three.js
+```text
+label, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
+```
 
-仅当操作三维物件本身就是模板签名动作时，才使用 `three-diegetic`。
-Three.js 负责物件、材质、光与空间；DOM 负责文字和语义等价操作。
-必须提供 WebGL/CDN 降级、受限像素比、减少动态效果、移动端简化，以及键盘与触屏等价操作。
+四个阶段必须有可感知变化，但仍属于同一本书。
+除 Window 外，阶段通常复用同一张主图，通过天气、光线、环境声、文字、动画和局部 UI 表达变化。
 
-### 浮层
+## 一级能力
 
-优先原地变形，少用面板。
-任何浮层都必须能通过背景区域或清晰的世界内退出动作关闭；条件允许时支持 Escape，且不得产生死路。
+每个模板的预制陪伴组件必须提供：
 
-## 校验
+- 重新开始入静引导；
+- 天气强度：关闭 / 低 / 中；
+- 声音播放 / 暂停 / 音量；
+- 四阶段切换；
+- 阅读计时：暂停 / 继续 / 重置；
+- 25 分钟番茄钟。
 
-交付前检查：
+组件必须符合模板表达，默认安静，不遮挡首屏主体。
 
-- 必要文件存在，所有引用路径有效；
-- SpaceSpec 符合 `references/space-spec-schema.md`；
-- 签名拓扑符合模板，并真实实现了关系；
-- 协议状态包含 `entry`、`exploration`、`companion`；
-- 存在持续可见的天气，且不遮挡正文；
-- 选中的阅读工具可用，未选择的工具没有生成通用界面；
-- BGM 元数据声明 `is_instrumental: true`，生成的 BGM 不含歌词与人声；
-- 概念图按模板图像角色使用；
-- 页面固定视口、响应式、可访问，并支持减少动态效果；
-- 浏览器实测路径为：初始情境 → 签名关系动作 → 可观察的世界变化 → 持续阅读能力。
+## 图片
 
-如果页面只需替换书名、标签和颜色就能用于无关书籍，必须重新设计。
+- 默认生成一张 16:9 主图；
+- 图片必须有 UI 安全留白，不含可读文字、Logo 或生成式 UI；
+- Window 的母图必须直接包含完整窗边空间；前端不得重画复杂窗框；
+- Window 可基于母图进行最多三次图生图，只改变窗外风景、天气、季节、时间与光线；
+- Vinyl、Instrument、Route、Symbols 默认只生成一张主图。
+
+## 声音
+
+- 每本书只生成一首 BGM；
+- 必须声明 `is_instrumental: true`；
+- 最终状态只能为 `generated`、`skipped` 或 `failed`；
+- 用户点击开始后立即尝试播放 BGM；
+- BGM 不可用时立即播放环境音；
+- 页面不能通过 `fetch()` 元数据后才发现 BGM；
+- 只复制实际使用的音频。
+
+## 轻量校验
+
+不要让生成 Agent 对自己的审美和内容质量写长篇自评。交付前只做确定性的运行底线检查：
+
+- 输出文件齐全；
+- `space-spec.json` 与 `bgm-meta.json` 可解析；
+- `app.js` 无语法错误；
+- HTML 正确加载 CSS 与 JS；
+- HTML 引用的本地资源存在；
+- 有浏览器工具时，打开页面并点击一次开始按钮，确认没有立即报错。
+
+书籍贴合度、画面气质、阶段表达和模板个性属于产品验收，不属于每次生成任务的自动校验。

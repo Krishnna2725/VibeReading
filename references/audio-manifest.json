@@ -2,10 +2,10 @@
   "bgm": [
     {
       "id": "bgm",
-      "label": "BGM",
+      "label": "全书 BGM",
       "file": "bgm.mp3",
       "mood": ["定制", "纯音乐", "氛围"],
-      "note": "由 MiniMax music-2.6-free 根据书籍气质生成，进入页面后自动播放"
+      "note": "使用 MiniMax 根据书籍气质生成；用户点击开始后立即播放；必须携带 is_instrumental: true"
     }
   ],
   "nature": [
