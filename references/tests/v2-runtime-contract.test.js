@@ -11,8 +11,10 @@ test("运行时不会跳过每次刷新后的首页入静", () => {
 });
 
 test("运行时具备声音优先级与入静声音保证", () => {
-  assert.match(runtime, /await tryPlay\(bgm/);
-  assert.match(runtime, /for \(const audio of ambience\)/);
+  assert.match(runtime, /const candidates = \[/);
+  assert.match(runtime, /Promise\.all\(attempts\)/);
+  assert.match(runtime, /source: "bgm"/);
+  assert.match(runtime, /source: "ambience"/);
   assert.match(runtime, /await beginSound\(\);\s+runGuide\(\)/);
 });
 
@@ -21,6 +23,7 @@ test("运行时具备可变阶段接口、天气、计时与番茄钟", () => {
   assert.match(runtime, /document\.addEventListener\("click"/);
   assert.match(runtime, /renderWeather/);
   assert.match(runtime, /data-vr-stage/);
+  assert.match(runtime, /data-vr-current-hint/);
   assert.match(runtime, /data-vr-weather-level/);
   assert.match(runtime, /25 \* 60/);
   assert.match(runtime, /vibereading:pomodoro-complete/);

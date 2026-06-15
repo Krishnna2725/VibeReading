@@ -238,6 +238,7 @@
 
 .vr-companion-kicker,
 .vr-companion-range,
+.vr-companion-hint,
 .vr-tool-label {
   display: block;
   color: var(--vr-muted);
@@ -257,6 +258,19 @@
 .vr-companion-range {
   max-width: 18rem;
   line-height: 1.5;
+}
+
+.vr-companion-hint {
+  display: -webkit-box;
+  max-width: 23rem;
+  margin-top: 0.45rem;
+  overflow: hidden;
+  color: rgba(242, 241, 234, 0.7);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .vr-stage-row {

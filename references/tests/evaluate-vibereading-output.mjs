@@ -98,6 +98,7 @@ function checkDir(dir) {
     "stage switching": /data-vr-stage/i,
     "stage container": /data-vr-stages/i,
     "current stage label": /data-vr-current-stage/i,
+    "current stage hint": /data-vr-current-hint/i,
     "weather layer": /data-vr-weather/i,
     "reading timer": /data-vr-timer-toggle/i,
     "pomodoro": /pomodoro/i
@@ -125,6 +126,9 @@ function checkDir(dir) {
       }
       if (!Array.isArray(stage.chapters) || !stage.chapters.length) {
         failures.push(`space-spec stages[${index}].chapters must list grouped chapters`);
+      }
+      if (Array.isArray(stage.floatingTexts) && stage.floatingTexts.length) {
+        failures.push(`space-spec stages[${index}].floatingTexts is not allowed; use the preset readingHint`);
       }
     }
     if (!Array.isArray(spec.entryGuide?.steps) || !spec.entryGuide.steps.length) {

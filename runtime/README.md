@@ -23,7 +23,7 @@ runtime/v2-runtime.css
 <script src="./runtime/v2-runtime.js"></script>
 ```
 
-`app.js` 必须在顶层同步定义 `window.VIBE_READING_SPEC`。运行时负责生成 `[data-vr-stages]` 中的阶段按钮；书籍专属代码不得重复生成共享控件。
+`app.js` 必须在顶层同步定义 `window.VIBE_READING_SPEC`。运行时负责生成 `[data-vr-stages]` 中的阶段按钮，并在预制面板展示当前阶段的标题、目录范围和 `readingHint`；书籍专属代码不得重复生成共享控件、阶段卡或说明面板。
 
 运行时通过 `data-vr-*` 属性连接页面控件，提供：
 

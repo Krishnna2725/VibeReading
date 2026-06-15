@@ -104,12 +104,14 @@ visualMotif, musicDirection, textVoice, motionCharacter, uiLanguage, avoid
 再根据真实目录和章节进度，定义 3–6 个阶段各自的：
 
 ```text
-label, sourceRange, chapters, readingHint, floatingTexts, weather, light, ambience, motion, uiAccent
+label, sourceRange, chapters, readingHint, weather, light, ambience, motion, uiAccent
 ```
 
 阶段数量由 AI 根据目录结构主动决定，下限 3 个、上限 6 个。章节较多时应按结构转折和阅读进度聚合，不得用纯情绪阶段替代目录依据。
 各阶段必须有可感知变化，但仍属于同一本书；提示无剧透，不解释后续剧情。
-除 Window 外，阶段通常复用同一张主图，通过天气、光线、环境声、文字、动画和局部 UI 表达变化。
+除 Window 外，阶段通常复用同一张主图，通过天气、光线、环境声、短暂文字和动画表达变化。
+
+`readingHint` 已由预制陪伴面板展示。书籍专属代码不得再创建第二张阶段卡、说明面板或控制面板；不得生成持续漂浮的文字胶囊、标签群或随机游走文字。若场景内确有必要出现文字，每次最多一句，必须在阶段切换后短暂显现并自动退场，不能长期占据阅读画面。
 
 ## 一级能力
 

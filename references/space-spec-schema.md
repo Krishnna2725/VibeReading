@@ -53,7 +53,6 @@
       "sourceRange": "",
       "chapters": [],
       "readingHint": "",
-      "floatingTexts": [],
       "weather": "",
       "light": "",
       "ambience": "",
@@ -92,7 +91,8 @@
 - `soundRequiredAfterStart` 必须为 `true`。
 - `stages` 必须包含 3–6 项，由 AI 主动检索目录并按章节进度聚合。
 - 每个阶段必须填写 `sourceRange` 和 `chapters`，不得使用纯情绪阶段替代目录依据。
-- 每个阶段至少有 2 条 `floatingTexts`。
+- `readingHint` 由预制陪伴面板直接展示，不要在场景中重复生成阶段卡或说明面板。
+- 不使用 `floatingTexts`、漂浮胶囊或标签群。若模板确需场景文字，每个阶段最多一句短暂文字，并在出现后自动退场。
 - 只有 `window` 可填写 `windowVariations`，最多三项。
 - Window 的 `windowComposition` 必须保持 `70 / 55 / 30` 构图底线。
 - `audio.isInstrumental` 必须为 `true`。

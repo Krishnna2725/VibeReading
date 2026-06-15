@@ -93,31 +93,32 @@
       root.dataset.vrPomodoroComplete = "false";
     }
 
-    async function tryPlay(audio, volume) {
-      if (!audio) return false;
-      audio.loop = true;
-      audio.volume = volume;
-      try {
-        await audio.play();
-        activeAudio = audio;
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
     async function beginSound() {
       if (!soundEnabled) return false;
       if (activeAudio && !activeAudio.paused) return true;
-      if (await tryPlay(bgm, 0.45)) {
-        root.dataset.vrSoundSource = "bgm";
+      const candidates = [
+        ...(bgm ? [{ audio: bgm, volume: 0.45, source: "bgm" }] : []),
+        ...ambience.map((audio) => ({ audio, volume: 0.32, source: "ambience" }))
+      ];
+
+      // Start every candidate inside the same click gesture so a failed BGM
+      // attempt cannot consume autoplay permission before the fallback.
+      const attempts = candidates.map(({ audio, volume, source }) => {
+        audio.loop = true;
+        audio.volume = volume;
+        return Promise.resolve(audio.play())
+          .then(() => ({ audio, source, played: true }))
+          .catch(() => ({ audio, source, played: false }));
+      });
+      const results = await Promise.all(attempts);
+      const winner = results.find((result) => result.played);
+      results.forEach((result) => {
+        if (result.played && result !== winner) result.audio.pause();
+      });
+      if (winner) {
+        activeAudio = winner.audio;
+        root.dataset.vrSoundSource = winner.source;
         return true;
-      }
-      for (const audio of ambience) {
-        if (await tryPlay(audio, 0.32)) {
-          root.dataset.vrSoundSource = "ambience";
-          return true;
-        }
       }
       root.dataset.vrSoundSource = "unavailable";
       window.dispatchEvent(new CustomEvent("vibereading:sound-unavailable"));
@@ -149,8 +150,10 @@
       root.dataset.vrStage = stage.id;
       const currentStage = one("[data-vr-current-stage]");
       const currentRange = one("[data-vr-current-range]");
+      const currentHint = one("[data-vr-current-hint]");
       if (currentStage) currentStage.textContent = stage.label;
       if (currentRange) currentRange.textContent = stage.sourceRange || (stage.chapters || []).join(" · ");
+      if (currentHint) currentHint.textContent = stage.readingHint || "";
       all("[data-vr-stage]").forEach((button) => {
         button.setAttribute("aria-pressed", String(Number(button.dataset.vrStage) === safeIndex));
       });
