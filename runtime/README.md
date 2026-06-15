@@ -1,23 +1,29 @@
 # V2 共享运行时
 
-生成页面时可以复制或内联：
+生成页面时必须把共享运行时复制到输出目录并外链。禁止把运行时复制后又内联，禁止同一脚本或样式重复加载。
+
+不要手写骨架。先运行：
+
+```bash
+python scripts/scaffold-output.py --output-dir "output/<任务>"
+```
 
 ```text
 runtime/v2-runtime.js
 runtime/v2-runtime.css
 ```
 
-页面必须在加载运行时前定义：
+标准加载顺序：
 
 ```html
-<script>
-  window.VIBE_READING_SPEC = {
-    entryGuide: { durationSec: 20, steps: [] },
-    audio: { bgmFile: "./assets/audio/bgm.mp3", ambienceFiles: [] },
-    stages: []
-  };
-</script>
+<link rel="stylesheet" href="./runtime/v2-runtime.css">
+<link rel="stylesheet" href="./style.css">
+...
+<script src="./app.js"></script>
+<script src="./runtime/v2-runtime.js"></script>
 ```
+
+`app.js` 必须在顶层同步定义 `window.VIBE_READING_SPEC`。运行时负责生成 `[data-vr-stages]` 中的阶段按钮；书籍专属代码不得重复生成共享控件。
 
 运行时通过 `data-vr-*` 属性连接页面控件，提供：
 

@@ -48,6 +48,7 @@ description: >
 选择音频：  references/audio-manifest.json
 生成 BGM： references/music-generation.md
 可选天气：  references/effects-recipes.md
+动画增强：  references/motion-guidance.md
 ```
 
 不得读取未选中的模板，不得读取 Git 历史中的旧模板，生成过程中不要读取 `references/tests/`。
@@ -60,13 +61,13 @@ description: >
 4. 读取 `template-index.md`，选择恰好一个模板。
 5. 仅读取选中模板；根据目录与章节进度聚合 3–6 个阅读阶段，并定义书籍身份。
 6. 读取 `space-spec-schema.md`，生成 `space-spec.json`。
-7. 读取 `music-generation.md`，异步启动一首纯音乐 BGM。
-8. 读取 `image-generation.md`，生成一张主图；仅 Window 可基于母图生成最多三张变化图。
+7. 读取 `music-generation.md`，用 `scripts/bgm-gen.py start` 启动后台 BGM 任务；不得自行等待接口或跳过。
+8. 读取 `image-generation.md`，先把设计要求转译成纯视觉 Prompt，再调用生图工具；仅 Window 可基于母图生成最多三张变化图。
 9. 读取音频清单，选择必要环境音作为氛围与 BGM 失败兜底。
-10. 加载共享运行时与模板专属陪伴组件骨架。
-11. 生成 `index.html`、`style.css`、`app.js`。
+10. 运行 `python scripts/scaffold-output.py --output-dir "output/<任务>"` 创建标准页面骨架；不要自行重建或内联共享运行时。
+11. 只修改书籍专属的 `app.js`、`style.css` 和主体场景标记。
 12. 复制实际引用的图片与音频。
-13. 运行一次纯代码集成校验，检查入静、声音、阶段切换、计时、番茄钟、双击运行约束与显示比例。
+13. 用 `scripts/bgm-gen.py status` 验收后台 BGM，并运行纯代码集成校验。
 
 ## 输出结构
 
@@ -78,6 +79,9 @@ output/[YYYY-MM-DD-《书名》-测试目的]/
 ├── space-spec.json
 ├── bgm-meta.json
 ├── concept-image.png
+├── prompts/
+│   ├── image.txt
+│   └── bgm.txt
 ├── stage-2.png               # 仅 Window 按需生成
 ├── stage-3.png               # 仅 Window 按需生成
 ├── stage-4.png               # 仅 Window 按需生成
@@ -87,7 +91,7 @@ output/[YYYY-MM-DD-《书名》-测试目的]/
         └── ...
 ```
 
-HTML、CSS 与 JS 必须拆分。关键配置必须内联到 `app.js` 或 HTML，不得依赖 `fetch()` 本地 JSON。
+HTML、CSS 与 JS 必须拆分。复制并外链共享运行时，禁止复制后再次内联、禁止重复加载。关键配置定义在 `app.js`，不得依赖 `fetch()` 本地 JSON。
 
 ## 书籍身份与阶段
 
@@ -123,8 +127,10 @@ label, sourceRange, chapters, readingHint, floatingTexts, weather, light, ambien
 ## 图片
 
 - 默认生成一张 16:9 主图；
-- 图片必须有 UI 安全留白，不含可读文字、Logo 或生成式 UI；
+- 模板规则必须先转译成纯视觉 Prompt，不能原样输入生图工具；
+- 图片不得出现任何文字、字符、数字、Logo、水印、标签、招牌、UI 或面板；
 - Window 的母图必须直接包含完整窗边空间；前端不得重画复杂窗框；
+- Window 中窗户与窗外景色至少占 70%，窗外可见景色至少占 55%，室内与家具合计不得超过 30%；
 - Window 可基于母图进行最多三次图生图，只改变窗外风景、天气、季节、时间与光线；
 - Vinyl、Instrument、Route、Symbols 默认只生成一张主图。
 
@@ -132,7 +138,7 @@ label, sourceRange, chapters, readingHint, floatingTexts, weather, light, ambien
 
 - 每本书只生成一首 BGM；
 - 必须声明 `is_instrumental: true`；
-- 最终状态只能为 `generated`、`skipped` 或 `failed`；
+- 最终状态只能为 `generated` 或 `failed`；不得因为等待时间较长、接口调用方式不明或资源生成不方便而写成 `skipped`；
 - 用户点击开始后立即尝试播放 BGM；
 - BGM 不可用时立即播放环境音；
 - 页面不能通过 `fetch()` 元数据后才发现 BGM；

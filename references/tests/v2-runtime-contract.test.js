@@ -17,6 +17,9 @@ test("运行时具备声音优先级与入静声音保证", () => {
 });
 
 test("运行时具备可变阶段接口、天气、计时与番茄钟", () => {
+  assert.match(runtime, /renderStageButtons/);
+  assert.match(runtime, /document\.addEventListener\("click"/);
+  assert.match(runtime, /renderWeather/);
   assert.match(runtime, /data-vr-stage/);
   assert.match(runtime, /data-vr-weather-level/);
   assert.match(runtime, /25 \* 60/);

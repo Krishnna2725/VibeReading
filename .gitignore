@@ -7,3 +7,7 @@ TWO-COMPANION-MODES-PLAN.md
 # Local OS metadata
 .DS_Store
 Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc

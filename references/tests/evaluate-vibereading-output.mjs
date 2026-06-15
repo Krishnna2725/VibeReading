@@ -14,7 +14,9 @@ const requiredFiles = [
   "app.js",
   "space-spec.json",
   "bgm-meta.json",
-  "concept-image.png"
+  "concept-image.png",
+  "prompts/image.txt",
+  "prompts/bgm.txt"
 ];
 
 function parseJson(file, failures) {
@@ -56,6 +58,8 @@ function checkDir(dir) {
 
   const specFile = path.join(abs, "space-spec.json");
   const metaFile = path.join(abs, "bgm-meta.json");
+  const imagePromptFile = path.join(abs, "prompts", "image.txt");
+  const bgmPromptFile = path.join(abs, "prompts", "bgm.txt");
   const spec = fs.existsSync(specFile) ? parseJson(specFile, failures) : null;
   if (fs.existsSync(metaFile)) parseJson(metaFile, failures);
 
@@ -65,6 +69,8 @@ function checkDir(dir) {
   const html = fs.existsSync(htmlFile) ? fs.readFileSync(htmlFile, "utf8") : "";
   const css = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, "utf8") : "";
   const js = fs.existsSync(jsFile) ? fs.readFileSync(jsFile, "utf8") : "";
+  const imagePrompt = fs.existsSync(imagePromptFile) ? fs.readFileSync(imagePromptFile, "utf8") : "";
+  const bgmPrompt = fs.existsSync(bgmPromptFile) ? fs.readFileSync(bgmPromptFile, "utf8") : "";
   let code = `${html}\n${css}\n${js}`;
 
   if (html) {
@@ -72,6 +78,17 @@ function checkDir(dir) {
     if (!/href=["'](?:\.\/)?style\.css["']/.test(html)) failures.push("index.html does not load style.css");
     if (!/src=["'](?:\.\/)?app\.js["']/.test(html)) failures.push("index.html does not load app.js");
     code += readLocalAssets(abs, html, failures);
+    const runtimeCssCount = (html.match(/href=["']\.\/runtime\/v2-runtime\.css["']/g) || []).length;
+    const runtimeJsCount = (html.match(/src=["']\.\/runtime\/v2-runtime\.js["']/g) || []).length;
+    const appJsCount = (html.match(/src=["']\.\/app\.js["']/g) || []).length;
+    if (runtimeCssCount !== 1) failures.push("index.html must load ./runtime/v2-runtime.css exactly once");
+    if (runtimeJsCount !== 1) failures.push("index.html must load ./runtime/v2-runtime.js exactly once");
+    if (appJsCount !== 1) failures.push("index.html must load ./app.js exactly once");
+    if (/<style\b/i.test(html)) failures.push("index.html must not inline shared or book CSS");
+    if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) failures.push("index.html must not inline JavaScript");
+    if (html.indexOf('src="./app.js"') > html.indexOf('src="./runtime/v2-runtime.js"')) {
+      failures.push("app.js must load before runtime/v2-runtime.js");
+    }
   }
 
   const featureChecks = {
@@ -79,6 +96,9 @@ function checkDir(dir) {
     "sound playback": /\.play\s*\(/i,
     "sound control": /data-vr-sound-toggle/i,
     "stage switching": /data-vr-stage/i,
+    "stage container": /data-vr-stages/i,
+    "current stage label": /data-vr-current-stage/i,
+    "weather layer": /data-vr-weather/i,
     "reading timer": /data-vr-timer-toggle/i,
     "pomodoro": /pomodoro/i
   };
@@ -113,6 +133,34 @@ function checkDir(dir) {
     if (spec.entryGuide?.soundRequiredAfterStart !== true) {
       failures.push("space-spec entryGuide.soundRequiredAfterStart must be true");
     }
+    const meta = fs.existsSync(metaFile) ? parseJson(metaFile, failures) : null;
+    if (meta && !["generated", "failed"].includes(meta.status)) {
+      failures.push("final bgm-meta status must be generated or failed; pending/skipped is not deliverable");
+    }
+    for (const file of spec.audio?.ambienceFiles || []) {
+      if (!fs.existsSync(path.resolve(abs, file))) failures.push(`missing ambience fallback ${file}`);
+    }
+    if (meta?.status === "failed" && !(spec.audio?.ambienceFiles || []).length) {
+      failures.push("failed BGM requires at least one copied ambience fallback");
+    }
+    if (meta?.status === "generated" && !fs.existsSync(path.join(abs, "assets", "audio", "bgm.mp3"))) {
+      failures.push("bgm-meta is generated but assets/audio/bgm.mp3 is missing");
+    }
+    if (spec.template?.primary === "window") {
+      const composition = spec.visual?.windowComposition;
+      if (composition?.windowAndExteriorMinPercent !== 70 || composition?.exteriorMinPercent !== 55 || composition?.interiorMaxPercent !== 30) {
+        failures.push("window space-spec must declare the 70/55/30 composition contract");
+      }
+      if (!/70\s*%/.test(imagePrompt) || !/55\s*%/.test(imagePrompt)) {
+        failures.push("window image prompt must state the 70% and 55% composition constraints");
+      }
+    }
+  }
+  if (!/No text anywhere in the image/i.test(imagePrompt)) {
+    failures.push("image prompt must include the exact no-text instruction");
+  }
+  if (!/Strictly instrumental, no vocals, no singing, no spoken words, no lyrics\./i.test(bgmPrompt)) {
+    failures.push("BGM prompt must include the strict instrumental instruction");
   }
 
   return { dir: abs, failures };

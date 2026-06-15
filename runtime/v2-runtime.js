@@ -1,251 +1,299 @@
 (function () {
   "use strict";
 
-  const spec = window.VIBE_READING_SPEC;
-  if (!spec) {
-    console.error("VIBE_READING_SPEC is required before v2-runtime.js");
-    return;
-  }
+  function init() {
+    const spec = window.VIBE_READING_SPEC;
+    if (!spec) {
+      console.error("VIBE_READING_SPEC must be defined by app.js before v2-runtime.js");
+      return;
+    }
 
-  const $ = (selector) => document.querySelector(selector);
-  const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-  const root = document.documentElement;
-  const guide = $("[data-vr-guide]");
-  const guideText = $("[data-vr-guide-text]");
-  const guideStart = $("[data-vr-guide-start]");
-  const guideSkip = $("[data-vr-guide-skip]");
-  const guideReplay = $("[data-vr-guide-replay]");
-  const soundToggle = $("[data-vr-sound-toggle]");
-  const volumeControl = $("[data-vr-volume]");
-  const weatherButtons = $$("[data-vr-weather-level]");
-  const stageButtons = $$("[data-vr-stage]");
-  const timerDisplay = $("[data-vr-timer-display]");
-  const timerToggle = $("[data-vr-timer-toggle]");
-  const timerReset = $("[data-vr-timer-reset]");
-  const timerMode = $("[data-vr-timer-mode]");
+    const root = document.documentElement;
+    const one = (selector) => document.querySelector(selector);
+    const all = (selector) => Array.from(document.querySelectorAll(selector));
+    const bgm = spec.audio?.bgmFile ? new Audio(spec.audio.bgmFile) : null;
+    const ambience = (spec.audio?.ambienceFiles || []).map((file) => new Audio(file));
+    const guideSteps = spec.entryGuide?.steps || [];
+    const stages = spec.stages || [];
+    const bookTitle = one("[data-vr-book-title]");
+    if (bookTitle) bookTitle.textContent = spec.book?.title || "开始阅读";
 
-  const bgm = spec.audio?.bgmFile ? new Audio(spec.audio.bgmFile) : null;
-  const ambience = (spec.audio?.ambienceFiles || []).map((file) => new Audio(file));
-  const guideSteps = spec.entryGuide?.steps || [];
-  const stages = spec.stages || [];
+    let activeAudio = null;
+    let guideTimers = [];
+    let soundEnabled = true;
+    let timerRunning = false;
+    let timerSeconds = 0;
+    let timerInterval = null;
+    let timerKind = "elapsed";
 
-  let activeAudio = null;
-  let guideTimers = [];
-  let currentStage = 0;
-  let soundEnabled = true;
-  let timerRunning = false;
-  let timerSeconds = 0;
-  let timerInterval = null;
-  let timerKind = "elapsed";
+    function renderStageButtons() {
+      const container = one("[data-vr-stages]");
+      if (!container || container.querySelector("[data-vr-stage]")) return;
+      stages.forEach((stage, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "vr-button vr-stage-button";
+        button.dataset.vrStage = String(index);
+        button.textContent = `${String(index + 1).padStart(2, "0")} ${stage.label}`;
+        button.title = stage.sourceRange || (stage.chapters || []).join("、");
+        button.setAttribute("aria-pressed", String(index === 0));
+        container.appendChild(button);
+      });
+    }
 
-  function formatTime(seconds) {
-    const safe = Math.max(0, seconds);
-    const minutes = Math.floor(safe / 60);
-    const remainder = safe % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-  }
+    function formatTime(seconds) {
+      const safe = Math.max(0, seconds);
+      return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+    }
 
-  function updateTimerDisplay() {
-    if (timerDisplay) timerDisplay.textContent = formatTime(timerSeconds);
-  }
+    function updateTimerDisplay() {
+      const display = one("[data-vr-timer-display]");
+      if (display) display.textContent = formatTime(timerSeconds);
+    }
 
-  function resetTimerForMode() {
-    timerSeconds = timerKind === "pomodoro" ? 25 * 60 : 0;
-    updateTimerDisplay();
-  }
+    function resetTimerForMode() {
+      timerSeconds = timerKind === "pomodoro" ? 25 * 60 : 0;
+      updateTimerDisplay();
+    }
 
-  function tickTimer() {
-    if (timerKind === "pomodoro") {
-      timerSeconds -= 1;
-      if (timerSeconds <= 0) {
-        timerSeconds = 0;
-        stopTimer();
-        root.dataset.vrPomodoroComplete = "true";
-        window.dispatchEvent(new CustomEvent("vibereading:pomodoro-complete"));
+    function stopTimer() {
+      timerRunning = false;
+      window.clearInterval(timerInterval);
+      timerInterval = null;
+      const toggle = one("[data-vr-timer-toggle]");
+      if (toggle) toggle.textContent = "继续";
+    }
+
+    function tickTimer() {
+      if (timerKind === "pomodoro") {
+        timerSeconds -= 1;
+        if (timerSeconds <= 0) {
+          timerSeconds = 0;
+          stopTimer();
+          root.dataset.vrPomodoroComplete = "true";
+          window.dispatchEvent(new CustomEvent("vibereading:pomodoro-complete"));
+        }
+      } else {
+        timerSeconds += 1;
       }
-    } else {
-      timerSeconds += 1;
-    }
-    updateTimerDisplay();
-  }
-
-  function startTimer() {
-    if (timerRunning) return;
-    timerRunning = true;
-    timerInterval = window.setInterval(tickTimer, 1000);
-    if (timerToggle) timerToggle.textContent = "暂停";
-  }
-
-  function stopTimer() {
-    timerRunning = false;
-    window.clearInterval(timerInterval);
-    timerInterval = null;
-    if (timerToggle) timerToggle.textContent = "继续";
-  }
-
-  function resetTimer() {
-    stopTimer();
-    resetTimerForMode();
-    root.dataset.vrPomodoroComplete = "false";
-  }
-
-  async function tryPlay(audio, volume) {
-    if (!audio) return false;
-    audio.loop = true;
-    audio.volume = volume;
-    try {
-      await audio.play();
-      activeAudio = audio;
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function beginSound() {
-    if (!soundEnabled) return false;
-    if (activeAudio && !activeAudio.paused) return true;
-
-    const bgmStarted = await tryPlay(bgm, 0.45);
-    if (bgmStarted) {
-      root.dataset.vrSoundSource = "bgm";
-      return true;
+      updateTimerDisplay();
     }
 
-    for (const audio of ambience) {
-      if (await tryPlay(audio, 0.32)) {
-        root.dataset.vrSoundSource = "ambience";
+    function startTimer() {
+      if (timerRunning) return;
+      timerRunning = true;
+      timerInterval = window.setInterval(tickTimer, 1000);
+      const toggle = one("[data-vr-timer-toggle]");
+      if (toggle) toggle.textContent = "暂停";
+    }
+
+    function resetTimer() {
+      stopTimer();
+      resetTimerForMode();
+      root.dataset.vrPomodoroComplete = "false";
+    }
+
+    async function tryPlay(audio, volume) {
+      if (!audio) return false;
+      audio.loop = true;
+      audio.volume = volume;
+      try {
+        await audio.play();
+        activeAudio = audio;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function beginSound() {
+      if (!soundEnabled) return false;
+      if (activeAudio && !activeAudio.paused) return true;
+      if (await tryPlay(bgm, 0.45)) {
+        root.dataset.vrSoundSource = "bgm";
         return true;
       }
+      for (const audio of ambience) {
+        if (await tryPlay(audio, 0.32)) {
+          root.dataset.vrSoundSource = "ambience";
+          return true;
+        }
+      }
+      root.dataset.vrSoundSource = "unavailable";
+      window.dispatchEvent(new CustomEvent("vibereading:sound-unavailable"));
+      return false;
     }
 
-    root.dataset.vrSoundSource = "unavailable";
-    window.dispatchEvent(new CustomEvent("vibereading:sound-unavailable"));
-    return false;
-  }
+    function pauseSound() {
+      [bgm, ...ambience].filter(Boolean).forEach((audio) => audio.pause());
+    }
 
-  function pauseSound() {
-    [bgm, ...ambience].filter(Boolean).forEach((audio) => audio.pause());
-  }
+    function setSoundEnabled(enabled) {
+      soundEnabled = enabled;
+      root.dataset.vrSound = enabled ? "on" : "off";
+      const toggle = one("[data-vr-sound-toggle]");
+      if (toggle) toggle.textContent = enabled ? "暂停声音" : "播放声音";
+      if (enabled) beginSound();
+      else pauseSound();
+    }
 
-  function setSoundEnabled(enabled) {
-    soundEnabled = enabled;
-    root.dataset.vrSound = enabled ? "on" : "off";
-    if (soundToggle) soundToggle.textContent = enabled ? "暂停声音" : "播放声音";
-    if (enabled) beginSound();
-    else pauseSound();
-  }
+    function clearGuideTimers() {
+      guideTimers.forEach((timer) => window.clearTimeout(timer));
+      guideTimers = [];
+    }
 
-  function clearGuideTimers() {
-    guideTimers.forEach((timer) => window.clearTimeout(timer));
-    guideTimers = [];
-  }
+    function selectStage(index) {
+      const safeIndex = Math.max(0, Math.min(index, stages.length - 1));
+      const stage = stages[safeIndex];
+      if (!stage) return;
+      root.dataset.vrStage = stage.id;
+      const currentStage = one("[data-vr-current-stage]");
+      const currentRange = one("[data-vr-current-range]");
+      if (currentStage) currentStage.textContent = stage.label;
+      if (currentRange) currentRange.textContent = stage.sourceRange || (stage.chapters || []).join(" · ");
+      all("[data-vr-stage]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(Number(button.dataset.vrStage) === safeIndex));
+      });
+      renderWeather(stage.weather || spec.weather?.kind || "");
+      window.dispatchEvent(new CustomEvent("vibereading:stage", { detail: { stage, index: safeIndex } }));
+    }
 
-  function enterReading() {
-    clearGuideTimers();
-    root.dataset.vrMode = "reading";
-    if (guide) guide.hidden = true;
-    selectStage(0);
-    startTimer();
-    window.dispatchEvent(new CustomEvent("vibereading:guide-complete"));
-  }
+    function weatherKind(description) {
+      const value = String(description).toLowerCase();
+      if (/雨|rain|drizzle|storm/.test(value)) return "rain";
+      if (/雪|snow/.test(value)) return "snow";
+      if (/雾|mist|fog|haze/.test(value)) return "mist";
+      if (/风|wind/.test(value)) return "wind";
+      return "dust";
+    }
 
-  function runGuide() {
-    clearGuideTimers();
-    root.dataset.vrMode = "guide";
-    if (guide) guide.hidden = false;
-    if (guideStart) guideStart.hidden = true;
-    if (guideSkip) guideSkip.hidden = false;
+    function renderWeather(description) {
+      const layer = one("[data-vr-weather]");
+      if (!layer) return;
+      const kind = weatherKind(description);
+      if (layer.dataset.vrWeatherKind === kind && layer.childElementCount) return;
+      layer.dataset.vrWeatherKind = kind;
+      layer.replaceChildren();
+      const count = kind === "rain" ? 42 : kind === "snow" ? 30 : kind === "mist" ? 4 : 24;
+      for (let index = 0; index < count; index += 1) {
+        const particle = document.createElement("i");
+        particle.style.setProperty("--vr-x", `${Math.random() * 100}%`);
+        particle.style.setProperty("--vr-delay", `${Math.random() * -12}s`);
+        particle.style.setProperty("--vr-duration", `${4 + Math.random() * 8}s`);
+        particle.style.setProperty("--vr-drift", `${-30 + Math.random() * 60}px`);
+        particle.style.setProperty("--vr-size", `${1 + Math.random() * 4}px`);
+        layer.appendChild(particle);
+      }
+    }
 
-    const total = Math.max(15, Math.min(25, spec.entryGuide?.durationSec || 20));
-    const stepDuration = Math.floor((total * 1000) / Math.max(guideSteps.length, 1));
+    function enterReading() {
+      clearGuideTimers();
+      root.dataset.vrMode = "reading";
+      const guide = one("[data-vr-guide]");
+      if (guide) guide.hidden = true;
+      selectStage(0);
+      startTimer();
+      window.dispatchEvent(new CustomEvent("vibereading:guide-complete"));
+    }
 
-    guideSteps.forEach((step, index) => {
-      const timer = window.setTimeout(() => {
-        root.dataset.vrGuideStep = step.id;
-        if (guideText) guideText.textContent = step.text;
-        window.dispatchEvent(new CustomEvent("vibereading:guide-step", { detail: step }));
-      }, index * stepDuration);
-      guideTimers.push(timer);
+    function runGuide() {
+      clearGuideTimers();
+      root.dataset.vrMode = "guide";
+      const guide = one("[data-vr-guide]");
+      const start = one("[data-vr-guide-start]");
+      const skip = one("[data-vr-guide-skip]");
+      if (guide) guide.hidden = false;
+      if (start) start.hidden = true;
+      if (skip) skip.hidden = true;
+      const title = one("[data-vr-book-title]");
+      const invitation = one("[data-vr-guide-invitation]");
+      if (title) title.hidden = true;
+      if (invitation) invitation.hidden = true;
+
+      const total = Math.max(15, Math.min(25, spec.entryGuide?.durationSec || 20));
+      const stepDuration = Math.floor((total * 1000) / Math.max(guideSteps.length, 1));
+      guideSteps.forEach((step, index) => {
+        guideTimers.push(window.setTimeout(() => {
+          root.dataset.vrGuideStep = step.id;
+          root.dataset.vrGuideAnimate = "false";
+          void root.offsetWidth;
+          const text = one("[data-vr-guide-text]");
+          const eyebrow = one("[data-vr-guide-eyebrow]");
+          const emphasis = one("[data-vr-guide-emphasis]");
+          if (text) text.textContent = step.text;
+          if (eyebrow) eyebrow.textContent = step.eyebrow || spec.entryGuide?.eyebrow || "";
+          if (emphasis) emphasis.textContent = step.emphasis || "";
+          root.dataset.vrGuideAnimate = "true";
+          window.dispatchEvent(new CustomEvent("vibereading:guide-step", { detail: step }));
+        }, index * stepDuration));
+      });
+      guideTimers.push(window.setTimeout(() => {
+        if (skip) skip.hidden = false;
+      }, Math.min(8000, Math.max(5000, stepDuration))));
+      guideTimers.push(window.setTimeout(enterReading, total * 1000));
+    }
+
+    function setWeather(level) {
+      root.dataset.vrWeatherLevel = level;
+      all("[data-vr-weather-level]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.vrWeatherLevel === level));
+      });
+      window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level } }));
+    }
+
+    document.addEventListener("click", async (event) => {
+      const target = event.target.closest("[data-vr-guide-start], [data-vr-guide-skip], [data-vr-guide-replay], [data-vr-sound-toggle], [data-vr-weather-level], [data-vr-stage], [data-vr-timer-toggle], [data-vr-timer-reset]");
+      if (!target) return;
+
+      if (target.matches("[data-vr-guide-start]")) {
+        await beginSound();
+        runGuide();
+      } else if (target.matches("[data-vr-guide-skip]")) {
+        await beginSound();
+        enterReading();
+      } else if (target.matches("[data-vr-guide-replay]")) {
+        stopTimer();
+        resetTimerForMode();
+        soundEnabled = true;
+        await beginSound();
+        runGuide();
+      } else if (target.matches("[data-vr-sound-toggle]")) {
+        setSoundEnabled(!soundEnabled);
+      } else if (target.matches("[data-vr-weather-level]")) {
+        setWeather(target.dataset.vrWeatherLevel);
+      } else if (target.matches("[data-vr-stage]")) {
+        selectStage(Number(target.dataset.vrStage));
+      } else if (target.matches("[data-vr-timer-toggle]")) {
+        if (timerRunning) stopTimer();
+        else startTimer();
+      } else if (target.matches("[data-vr-timer-reset]")) {
+        resetTimer();
+      }
     });
 
-    guideTimers.push(window.setTimeout(enterReading, total * 1000));
-  }
+    document.addEventListener("input", (event) => {
+      if (!event.target.matches("[data-vr-volume]")) return;
+      const volume = Number(event.target.value);
+      [bgm, ...ambience].filter(Boolean).forEach((audio) => {
+        audio.volume = volume;
+      });
+    });
 
-  async function startGuide() {
-    await beginSound();
-    runGuide();
-  }
+    document.addEventListener("change", (event) => {
+      if (!event.target.matches("[data-vr-timer-mode]")) return;
+      timerKind = event.target.value === "pomodoro" ? "pomodoro" : "elapsed";
+      resetTimer();
+    });
 
-  async function replayGuide() {
-    stopTimer();
-    resetTimerForMode();
-    soundEnabled = true;
+    window.addEventListener("beforeunload", pauseSound);
+    renderStageButtons();
+    root.dataset.vrMode = "home";
     root.dataset.vrSound = "on";
-    await beginSound();
-    runGuide();
+    resetTimerForMode();
+    setWeather("low");
+    selectStage(0);
   }
 
-  function setWeather(level) {
-    root.dataset.vrWeatherLevel = level;
-    weatherButtons.forEach((button) => {
-      button.setAttribute("aria-pressed", String(button.dataset.vrWeatherLevel === level));
-    });
-    window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level } }));
-  }
-
-  function selectStage(index) {
-    currentStage = Math.max(0, Math.min(index, stages.length - 1));
-    const stage = stages[currentStage];
-    if (!stage) return;
-
-    root.dataset.vrStage = stage.id;
-    stageButtons.forEach((button) => {
-      const selected = Number(button.dataset.vrStage) === currentStage;
-      button.setAttribute("aria-pressed", String(selected));
-    });
-    window.dispatchEvent(new CustomEvent("vibereading:stage", { detail: { stage, index: currentStage } }));
-  }
-
-  guideStart?.addEventListener("click", startGuide);
-  guideSkip?.addEventListener("click", async () => {
-    await beginSound();
-    enterReading();
-  });
-  guideReplay?.addEventListener("click", replayGuide);
-  soundToggle?.addEventListener("click", () => setSoundEnabled(!soundEnabled));
-  volumeControl?.addEventListener("input", (event) => {
-    const volume = Number(event.target.value);
-    [bgm, ...ambience].filter(Boolean).forEach((audio) => {
-      audio.volume = volume;
-    });
-  });
-  weatherButtons.forEach((button) => {
-    button.addEventListener("click", () => setWeather(button.dataset.vrWeatherLevel));
-  });
-  stageButtons.forEach((button) => {
-    button.addEventListener("click", () => selectStage(Number(button.dataset.vrStage)));
-  });
-  timerToggle?.addEventListener("click", () => {
-    if (timerRunning) stopTimer();
-    else startTimer();
-  });
-  timerReset?.addEventListener("click", resetTimer);
-  timerMode?.addEventListener("change", (event) => {
-    timerKind = event.target.value === "pomodoro" ? "pomodoro" : "elapsed";
-    resetTimer();
-  });
-
-  window.addEventListener("beforeunload", pauseSound);
-
-  root.dataset.vrMode = "home";
-  root.dataset.vrSound = "on";
-  root.dataset.vrWeatherLevel = "low";
-  root.dataset.vrStage = stages[0]?.id || "stage-1";
-  if (guide) guide.hidden = false;
-  if (guideStart) guideStart.hidden = false;
-  if (guideSkip) guideSkip.hidden = true;
-  resetTimerForMode();
-  setWeather("low");
-  selectStage(0);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
 })();

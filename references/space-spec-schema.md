@@ -32,7 +32,12 @@
     "primaryPrompt": "",
     "imageRole": "",
     "safeArea": "",
-    "windowVariations": []
+    "windowVariations": [],
+    "windowComposition": {
+      "windowAndExteriorMinPercent": 70,
+      "exteriorMinPercent": 55,
+      "interiorMaxPercent": 30
+    }
   },
   "audio": {
     "bgmPrompt": "",
@@ -89,6 +94,7 @@
 - 每个阶段必须填写 `sourceRange` 和 `chapters`，不得使用纯情绪阶段替代目录依据。
 - 每个阶段至少有 2 条 `floatingTexts`。
 - 只有 `window` 可填写 `windowVariations`，最多三项。
+- Window 的 `windowComposition` 必须保持 `70 / 55 / 30` 构图底线。
 - `audio.isInstrumental` 必须为 `true`。
 - 全书只使用一个 `bgmFile`。
 - `weather.levels` 必须支持 `off`、`low`、`medium`。

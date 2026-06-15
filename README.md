@@ -33,7 +33,10 @@ VibeReading 将一本书转译成一个低干扰、可持续停留的阅读陪�
 vibereading-skill/
 ├── SKILL.md
 ├── V2版更新计划.md
-├── runtime/                       # 共享一级能力运行时
+├── runtime/                       # 共享一级能力运行时与标准页面骨架
+├── scripts/
+│   ├── scaffold-output.py         # 创建可靠页面骨架
+│   └── bgm-gen.py                 # 后台等待并落盘 BGM
 ├── references/
 │   ├── template-index.md
 │   ├── templates/                 # 五个模板的个性化指导
@@ -82,7 +85,7 @@ output/YYYY-MM-DD-《书名》-测试目的/
 
 ```bash
 node --check runtime/v2-runtime.js
-node --test references/tests/note-share-export.test.js references/tests/v2-runtime-contract.test.js references/tests/output-evaluator.test.js
+node --test references/tests/note-share-export.test.js references/tests/v2-runtime-contract.test.js references/tests/output-evaluator.test.js references/tests/bgm-gen.test.js
 node references/tests/evaluate-vibereading-output.mjs output/<目录>
 ```
 
