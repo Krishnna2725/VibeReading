@@ -236,6 +236,11 @@
   gap: 1rem;
 }
 
+.vr-companion-header > .vr-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .vr-companion-kicker,
 .vr-companion-range,
 .vr-companion-hint,
