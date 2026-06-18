@@ -13,73 +13,97 @@
       "id": "soft-wind",
       "label": "Soft wind",
       "file": "nature/soft-wind.mp3",
-      "mood": ["calm", "outdoor", "wind"]
+      "mood": ["calm", "outdoor", "wind"],
+      "visualWeather": "wind",
+      "visualRequired": true
     },
     {
       "id": "distant-breeze",
       "label": "Distant breeze",
       "file": "nature/distant-breeze.mp3",
-      "mood": ["open", "dry", "wind"]
+      "mood": ["open", "dry", "wind"],
+      "visualWeather": "wind",
+      "visualRequired": true
     },
     {
       "id": "birds",
       "label": "Birdsong",
       "file": "nature/birds.mp3",
-      "mood": ["morning", "nature", "birds"]
+      "mood": ["morning", "nature", "birds"],
+      "visualWeather": "ambient-nature",
+      "visualRequired": false
     },
     {
       "id": "forest-wind-with-birds",
       "label": "Forest wind with birds",
       "file": "nature/forest-wind-with-birds-singing-364368.mp3",
-      "mood": ["forest", "alive", "breeze"]
+      "mood": ["forest", "alive", "breeze"],
+      "visualWeather": "wind",
+      "visualRequired": true
     },
     {
       "id": "night-sound-in-village-field",
       "label": "Village field at night",
       "file": "nature/night-sound-in-village-field.mp3",
-      "mood": ["night", "rural", "insects"]
+      "mood": ["night", "rural", "insects"],
+      "visualWeather": "ambient-nature",
+      "visualRequired": false
     },
     {
       "id": "lake-wavelet",
       "label": "Lake wavelets",
       "file": "nature/lake-wavelet.mp3",
-      "mood": ["lake", "calm", "water"]
+      "mood": ["lake", "calm", "water"],
+      "visualWeather": "ripple",
+      "visualRequired": true
     },
     {
       "id": "sea-and-seagull-wave",
       "label": "Sea waves and seagulls",
       "file": "nature/sea-and-seagull-wave.mp3",
-      "mood": ["sea", "open", "waves"]
+      "mood": ["sea", "open", "waves"],
+      "visualWeather": "water",
+      "visualRequired": true
     },
     {
       "id": "mountain-stream",
       "label": "Mountain stream",
       "file": "nature/the-sound-of-a-mountain-stream-_nature-sound-201930.mp3",
-      "mood": ["mountain", "flowing", "water"]
+      "mood": ["mountain", "flowing", "water"],
+      "visualWeather": "water",
+      "visualRequired": true
     },
     {
       "id": "windstorm",
       "label": "Windstorm",
       "file": "nature/Windstorm Ambience.mp3",
-      "mood": ["storm", "strong", "wind"]
+      "mood": ["storm", "strong", "wind"],
+      "visualWeather": "wind",
+      "visualRequired": true
     },
     {
       "id": "thunder-freight",
       "label": "Thunder and distant freight train",
       "file": "nature/rolling-thunder-amp-freight-train-in-the-rain-field-recording-353729.mp3",
-      "mood": ["thunder", "rain", "distant train"]
+      "mood": ["thunder", "rain", "distant train"],
+      "visualWeather": "rain",
+      "visualRequired": true
     },
     {
       "id": "drizzle",
       "label": "Drizzle",
       "file": "nature/Drizzle.mp3",
-      "mood": ["drizzle", "soft", "rain"]
+      "mood": ["drizzle", "soft", "rain"],
+      "visualWeather": "rain",
+      "visualRequired": true
     },
     {
       "id": "moderate-rain",
       "label": "Moderate rain",
       "file": "nature/Moderate rain.mp3",
-      "mood": ["rain", "steady", "calm"]
+      "mood": ["rain", "steady", "calm"],
+      "visualWeather": "rain",
+      "visualRequired": true
     }
   ],
   "ui": [
@@ -103,31 +127,41 @@
       "id": "a-small-library",
       "label": "Small library",
       "file": "indoor/a-small-library.mp3",
-      "mood": ["library", "quiet", "indoor"]
+      "mood": ["library", "quiet", "indoor"],
+      "visualWeather": "indoor-ambient",
+      "visualRequired": false
     },
     {
       "id": "cafe-ambience",
       "label": "Cafe ambience",
       "file": "indoor/people-talking-at-cafe-ambience-6159.mp3",
-      "mood": ["cafe", "voices", "indoor"]
+      "mood": ["cafe", "voices", "indoor"],
+      "visualWeather": "indoor-ambient",
+      "visualRequired": false
     },
     {
       "id": "fireplace-crackling",
       "label": "Fireplace crackling",
       "file": "indoor/burning-fireplace-crackling-fire-soundswav.mp3",
-      "mood": ["fireplace", "warm", "indoor"]
+      "mood": ["fireplace", "warm", "indoor"],
+      "visualWeather": "fire",
+      "visualRequired": true
     },
     {
       "id": "city-apartment",
       "label": "City apartment",
       "file": "indoor/city-apartment.mp3",
-      "mood": ["city", "apartment", "background"]
+      "mood": ["city", "apartment", "background"],
+      "visualWeather": "indoor-ambient",
+      "visualRequired": false
     },
     {
       "id": "rain-on-the-window",
       "label": "Rain on the window",
       "file": "indoor/rain-on-the-window-114709.mp3",
-      "mood": ["window", "rain", "indoor"]
+      "mood": ["window", "rain", "indoor"],
+      "visualWeather": "rain",
+      "visualRequired": true
     }
   ]
 }

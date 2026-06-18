@@ -2,6 +2,153 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+// --- Audio-Weather Coupling helpers ---
+
+/**
+ * Load audio-manifest.json from the skill's references directory.
+ * Returns a Map from asset id → { visualWeather, visualRequired }.
+ */
+function loadAudioManifest() {
+  const manifestPath = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")),
+    "..",
+    "audio-manifest.json"
+  );
+  if (!fs.existsSync(manifestPath)) return new Map();
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const map = new Map();
+    for (const category of Object.values(manifest)) {
+      if (!Array.isArray(category)) continue;
+      for (const asset of category) {
+        if (asset.id && asset.visualWeather) {
+          map.set(asset.id, {
+            visualWeather: asset.visualWeather,
+            visualRequired: !!asset.visualRequired,
+          });
+        }
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Given an ambience string (stage.ambience), resolve it to the asset's visualWeather.
+ * Handles both asset IDs and string fallbacks (rain, drizzle, wind, fireplace, etc.).
+ */
+function resolveAmbienceVisualWeather(ambienceStr, manifestMap) {
+  if (!ambienceStr || typeof ambienceStr !== "string") return null;
+  const key = ambienceStr.trim().toLowerCase();
+
+  // Direct lookup by asset ID
+  if (manifestMap.has(key)) {
+    const entry = manifestMap.get(key);
+    return { visualWeather: entry.visualWeather, visualRequired: entry.visualRequired };
+  }
+
+  // String fallback mapping for backward-compatible specs
+  const fallbackMap = {
+    rain: { visualWeather: "rain", visualRequired: true },
+    drizzle: { visualWeather: "rain", visualRequired: true },
+    "moderate-rain": { visualWeather: "rain", visualRequired: true },
+    "rain-on-the-window": { visualWeather: "rain", visualRequired: true },
+    "thunder-freight": { visualWeather: "rain", visualRequired: true },
+    fireplace: { visualWeather: "fire", visualRequired: true },
+    "fireplace-crackling": { visualWeather: "fire", visualRequired: true },
+    wind: { visualWeather: "wind", visualRequired: true },
+    "soft-wind": { visualWeather: "wind", visualRequired: true },
+    "distant-breeze": { visualWeather: "wind", visualRequired: true },
+    windstorm: { visualWeather: "wind", visualRequired: true },
+    wave: { visualWeather: "water", visualRequired: true },
+    stream: { visualWeather: "water", visualRequired: true },
+    lake: { visualWeather: "ripple", visualRequired: true },
+    sea: { visualWeather: "water", visualRequired: true },
+    ripple: { visualWeather: "ripple", visualRequired: true },
+    water: { visualWeather: "water", visualRequired: true },
+  };
+  if (fallbackMap[key]) return fallbackMap[key];
+
+  // Check if the ambience string contains a known keyword
+  for (const [kw, val] of Object.entries(fallbackMap)) {
+    if (key.includes(kw)) return val;
+  }
+
+  return null;
+}
+
+/**
+ * Check if a weather.kind is compatible with a visualWeather value.
+ * Allowed pairings: rain↔rain, fire↔fire, wind↔wind,
+ * ripple↔ripple, water↔water/ripple, ripple↔water.
+ */
+function isWeatherCompatible(weatherKind, visualWeather) {
+  if (!weatherKind || !visualWeather) return true; // can't check, pass
+  const wk = weatherKind.toLowerCase();
+  const vw = visualWeather.toLowerCase();
+
+  // Exact match
+  if (wk === vw) return true;
+
+  // Water and ripple are cross-compatible
+  if ((wk === "water" || wk === "ripple") && (vw === "water" || vw === "ripple")) return true;
+
+  // Neutral weather types are always compatible
+  const neutralWeather = new Set(["fog", "snow", "dust", "signal", "stars", "paper"]);
+  const neutralVisual = new Set(["indoor-ambient", "ambient-nature"]);
+  if (neutralWeather.has(wk) || neutralVisual.has(vw)) return true;
+
+  return false;
+}
+
+/**
+ * Check audio-weather coupling for all stages in a space-spec.
+ * Returns an array of failure strings.
+ */
+function checkAudioWeatherCoupling(spec, failures) {
+  if (!spec || !Array.isArray(spec.stages) || !spec.stages.length) return;
+
+  const manifestMap = loadAudioManifest();
+
+  for (const [index, stage] of spec.stages.entries()) {
+    const ambience = stage.ambience;
+    const weatherKind = stage.weather?.kind;
+
+    if (!ambience || !weatherKind) continue; // can't check incomplete data
+
+    const ambienceInfo = resolveAmbienceVisualWeather(ambience, manifestMap);
+
+    // Rule 1: If ambience is visualRequired:true, weather.kind must match visualWeather
+    if (ambienceInfo && ambienceInfo.visualRequired) {
+      if (!isWeatherCompatible(weatherKind, ambienceInfo.visualWeather)) {
+        failures.push(
+          `audio-weather mismatch stages[${index}]: ambience "${ambience}" requires ${ambienceInfo.visualWeather} visual, but weather.kind is "${weatherKind}"`
+        );
+      }
+    }
+
+    // Rule 2: If weather.kind is explicitly visual (rain/fire/wind/water/ripple),
+    // ambience should be from a matching category
+    const explicitVisualWeather = new Set(["rain", "fire", "wind", "water", "ripple"]);
+    if (explicitVisualWeather.has(weatherKind.toLowerCase())) {
+      if (ambienceInfo && ambienceInfo.visualRequired) {
+        if (!isWeatherCompatible(weatherKind, ambienceInfo.visualWeather)) {
+          // Already caught by Rule 1 above if both sides are explicit; skip duplicate
+        }
+      } else if (ambienceInfo && !ambienceInfo.visualRequired) {
+        // weather is explicit visual but ambience is non-visual — warn
+        failures.push(
+          `audio-weather mismatch stages[${index}]: weather.kind "${weatherKind}" expects matching audio, but ambience "${ambience}" is non-visual (${ambienceInfo.visualWeather})`
+        );
+      }
+    }
+  }
+}
+
+// --- End Audio-Weather Coupling helpers ---
+
 const dirs = process.argv.slice(2);
 if (!dirs.length) {
   console.error("Usage: node references/tests/evaluate-vibereading-output.mjs output/<dir> [...]");
@@ -249,6 +396,9 @@ function checkDir(dir) {
     if (meta?.status !== "reused" && fs.existsSync(bgmPromptFile) && (!/instrumental/i.test(bgmPrompt) || !/\bno\b.*\b(?:vocal|singing|spoken|lyric)/i.test(bgmPrompt))) {
       failures.push("BGM prompt must require instrumental with an explicit no-vocals constraint");
     }
+
+    // Audio-Weather Coupling check
+    checkAudioWeatherCoupling(spec, failures);
   }
 
   return { dir: abs, failures };

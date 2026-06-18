@@ -128,6 +128,18 @@ output/YYYY-MM-DD-BookTitle-purpose/
 Keep HTML, CSS, and JS separate. Copy and link the shared runtime; do not inline it and do not load it twice.
 Define page configuration in `app.js`. Do not depend on `fetch()` for local metadata.
 
+## Audio-Weather Coupling
+
+Environment sound and weather visuals must describe the same physical phenomenon whenever the selected audio asset has a visualizable counterpart. This is not optional polish — it prevents sensory dissonance that is worse than no effect.
+
+- Rain audio → rain visual (streaks, glass beads, ripples)
+- Fireplace audio → ember/fire-spark visual (slow drift, warm glow)
+- Wind audio → wind-line / subtle directional texture (directional particles, cloth flow)
+- Wave/stream audio → ripple/water visual (expanding circles, flowing lines)
+- Indoor ambience (library, cafe, city apartment) → neutral indoor texture, no forced weather
+
+See `references/audio-manifest.json` for the `visualWeather` and `visualRequired` fields on each asset, and `references/effects-recipes.md` for the full Audio-Weather Coupling rules and mapping table.
+
 ## Stage Rules
 
 Stage count is decided by the agent from the real book structure:
