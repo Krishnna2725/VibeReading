@@ -75,33 +75,16 @@ Ideas by template:
 
 ## Audio-Weather Coupling
 
-Environment sound and weather visuals must describe the same physical phenomenon. A mismatch between what the ear hears and what the eye sees is worse than no effect at all — it breaks the reader's sensory coherence.
+The following ambience-to-weather pairings are **mandatory**. All other ambience and weather combinations have no coupling requirement — use whatever fits the book.
 
-### Rules
+| Ambience assets | Required `weather.kind` |
+| --- | --- |
+| `drizzle`, `moderate-rain`, `rain-on-the-window`, `thunder-freight` | `rain` or `storm-rain` |
+| `fireplace-crackling` | `fire` or `embers` |
+| `soft-wind`, `distant-breeze`, `forest-wind-with-birds`, `windstorm` | `wind` |
+| `lake-wavelet`, `sea-and-seagull-wave`, `mountain-stream` | `ripple` or `water` |
 
-1. If a stage uses an ambience asset whose `visualRequired` is `true` in `audio-manifest.json`, the `weather.kind` for that stage must be a matching visual weather type.
-2. If a stage uses a visual weather type (`rain`, `fire`, `wind`, `ripple`, `water`), the stage ambience should preferably be from a matching audio category. Do not pair rain visuals with fireplace audio, or water visuals with wind audio.
-3. If the ambience is `indoor-ambient` or `ambient-nature` (`visualRequired: false`), use neutral indoor lighting, glass reflection, paper texture, or subtle nature textures — do not force rain, fire, wind, or water effects.
-4. At low or medium weather intensity, the matching visual must still be visible. "off" is the only level where it disappears.
-
-### Forbidden Mismatches
-
-- Rain ambience + dust motes only (no rain visual)
-- Fireplace audio + fog or snow visual
-- Wind audio + ripple or water visual
-- Wave/stream audio + fire or dust visual
-- Indoor ambience (library, cafe, city apartment) + rain/fire/wind/water visual
-
-### Audio-Visual Mapping
-
-| Audio category / asset | Required visual direction | Notes |
-| --- | --- | --- |
-| `drizzle`, `moderate-rain`, `rain-on-the-window`, `thunder-freight` | `rain` / `storm-rain` | Rain streaks, glass beads, window ripples; thunder may add low-frequency light flashes but keep them subtle |
-| `fireplace-crackling` | `fire` / `embers` | Slow ember drift, warm micro-glow, fireplace reflection; CSS ember layer is acceptable if p5 is unsuitable |
-| `soft-wind`, `distant-breeze`, `forest-wind-with-birds`, `windstorm` | `wind` | Subtle directional lines, wind streaks, paper/window surface flow; reference "My Altay"-style subtle wind texture, not chaotic dust |
-| `lake-wavelet`, `sea-and-seagull-wave`, `mountain-stream` | `ripple` / `water` | Faint expanding circles, flowing lines, low-opacity water surface disturbance |
-| `birds`, `night-sound-in-village-field` | `ambient-nature` / optional `wind` | Light natural texture; must not disguise as rain or water |
-| `a-small-library`, `cafe-ambience`, `city-apartment` | `indoor-ambient` / neutral | Indoor lighting, glass reflection, paper texture, low noise; no forced weather |
+This is a strict allowlist: only the pairs above are enforced. Assets not listed here (birds, library, cafe, city apartment, etc.) have no visual requirement.
 
 ## Implementation Rules
 

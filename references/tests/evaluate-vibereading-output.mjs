@@ -5,145 +5,89 @@ import { spawnSync } from "node:child_process";
 // --- Audio-Weather Coupling helpers ---
 
 /**
- * Load audio-manifest.json from the skill's references directory.
- * Returns a Map from asset id → { visualWeather, visualRequired }.
+ * Mandatory ambience → weather pairing list.
+ * Only assets in this map are enforced. All other combinations have no requirement.
  */
-function loadAudioManifest() {
-  const manifestPath = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")),
-    "..",
-    "audio-manifest.json"
-  );
-  if (!fs.existsSync(manifestPath)) return new Map();
-  try {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    const map = new Map();
-    for (const category of Object.values(manifest)) {
-      if (!Array.isArray(category)) continue;
-      for (const asset of category) {
-        if (asset.id && asset.visualWeather) {
-          map.set(asset.id, {
-            visualWeather: asset.visualWeather,
-            visualRequired: !!asset.visualRequired,
-          });
-        }
-      }
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
+const MANDATORY_COUPLING = new Map([
+  ["drizzle", "rain"],
+  ["moderate-rain", "rain"],
+  ["rain-on-the-window", "rain"],
+  ["thunder-freight", "rain"],
+  ["fireplace-crackling", "fire"],
+  ["soft-wind", "wind"],
+  ["distant-breeze", "wind"],
+  ["forest-wind-with-birds", "wind"],
+  ["windstorm", "wind"],
+  ["lake-wavelet", "ripple"],
+  ["sea-and-seagull-wave", "water"],
+  ["mountain-stream", "water"],
+]);
 
 /**
- * Given an ambience string (stage.ambience), resolve it to the asset's visualWeather.
- * Handles both asset IDs and string fallbacks (rain, drizzle, wind, fireplace, etc.).
+ * String fallbacks for backward-compatible specs that use short names
+ * instead of full asset IDs.
  */
-function resolveAmbienceVisualWeather(ambienceStr, manifestMap) {
+const STRING_FALLBACKS = new Map([
+  ["rain", "rain"],
+  ["drizzle", "rain"],
+  ["fireplace", "fire"],
+  ["wind", "wind"],
+  ["wave", "water"],
+  ["stream", "water"],
+  ["lake", "ripple"],
+  ["sea", "water"],
+]);
+
+/**
+ * Resolve an ambience string to its required weather kind.
+ * Returns the weather kind string if the ambience is on the mandatory list, null otherwise.
+ */
+function resolveRequiredWeather(ambienceStr) {
   if (!ambienceStr || typeof ambienceStr !== "string") return null;
   const key = ambienceStr.trim().toLowerCase();
 
   // Direct lookup by asset ID
-  if (manifestMap.has(key)) {
-    const entry = manifestMap.get(key);
-    return { visualWeather: entry.visualWeather, visualRequired: entry.visualRequired };
+  if (MANDATORY_COUPLING.has(key)) return MANDATORY_COUPLING.get(key);
+
+  // String fallback
+  if (STRING_FALLBACKS.has(key)) return STRING_FALLBACKS.get(key);
+
+  // Keyword containment check (e.g. "distant rain" contains "rain")
+  for (const [kw, weather] of MANDATORY_COUPLING) {
+    if (key.includes(kw)) return weather;
+  }
+  for (const [kw, weather] of STRING_FALLBACKS) {
+    if (key.includes(kw)) return weather;
   }
 
-  // String fallback mapping for backward-compatible specs
-  const fallbackMap = {
-    rain: { visualWeather: "rain", visualRequired: true },
-    drizzle: { visualWeather: "rain", visualRequired: true },
-    "moderate-rain": { visualWeather: "rain", visualRequired: true },
-    "rain-on-the-window": { visualWeather: "rain", visualRequired: true },
-    "thunder-freight": { visualWeather: "rain", visualRequired: true },
-    fireplace: { visualWeather: "fire", visualRequired: true },
-    "fireplace-crackling": { visualWeather: "fire", visualRequired: true },
-    wind: { visualWeather: "wind", visualRequired: true },
-    "soft-wind": { visualWeather: "wind", visualRequired: true },
-    "distant-breeze": { visualWeather: "wind", visualRequired: true },
-    windstorm: { visualWeather: "wind", visualRequired: true },
-    wave: { visualWeather: "water", visualRequired: true },
-    stream: { visualWeather: "water", visualRequired: true },
-    lake: { visualWeather: "ripple", visualRequired: true },
-    sea: { visualWeather: "water", visualRequired: true },
-    ripple: { visualWeather: "ripple", visualRequired: true },
-    water: { visualWeather: "water", visualRequired: true },
-  };
-  if (fallbackMap[key]) return fallbackMap[key];
-
-  // Check if the ambience string contains a known keyword
-  for (const [kw, val] of Object.entries(fallbackMap)) {
-    if (key.includes(kw)) return val;
-  }
-
-  return null;
+  return null; // not on the mandatory list — no requirement
 }
 
 /**
- * Check if a weather.kind is compatible with a visualWeather value.
- * Allowed pairings: rain↔rain, fire↔fire, wind↔wind,
- * ripple↔ripple, water↔water/ripple, ripple↔water.
- */
-function isWeatherCompatible(weatherKind, visualWeather) {
-  if (!weatherKind || !visualWeather) return true; // can't check, pass
-  const wk = weatherKind.toLowerCase();
-  const vw = visualWeather.toLowerCase();
-
-  // Exact match
-  if (wk === vw) return true;
-
-  // Water and ripple are cross-compatible
-  if ((wk === "water" || wk === "ripple") && (vw === "water" || vw === "ripple")) return true;
-
-  // Neutral weather types are always compatible
-  const neutralWeather = new Set(["fog", "snow", "dust", "signal", "stars", "paper"]);
-  const neutralVisual = new Set(["indoor-ambient", "ambient-nature"]);
-  if (neutralWeather.has(wk) || neutralVisual.has(vw)) return true;
-
-  return false;
-}
-
-/**
- * Check audio-weather coupling for all stages in a space-spec.
- * Returns an array of failure strings.
+ * Check audio-weather coupling for all stages.
+ * Only enforces the mandatory allowlist. Non-listed assets pass silently.
  */
 function checkAudioWeatherCoupling(spec, failures) {
   if (!spec || !Array.isArray(spec.stages) || !spec.stages.length) return;
 
-  const manifestMap = loadAudioManifest();
-
   for (const [index, stage] of spec.stages.entries()) {
     const ambience = stage.ambience;
     const weatherKind = stage.weather?.kind;
+    if (!ambience || !weatherKind) continue;
 
-    if (!ambience || !weatherKind) continue; // can't check incomplete data
+    const requiredWeather = resolveRequiredWeather(ambience);
+    if (!requiredWeather) continue; // not on the mandatory list
 
-    const ambienceInfo = resolveAmbienceVisualWeather(ambience, manifestMap);
+    const actual = weatherKind.toLowerCase();
+    if (actual === requiredWeather) continue; // match
 
-    // Rule 1: If ambience is visualRequired:true, weather.kind must match visualWeather
-    if (ambienceInfo && ambienceInfo.visualRequired) {
-      if (!isWeatherCompatible(weatherKind, ambienceInfo.visualWeather)) {
-        failures.push(
-          `audio-weather mismatch stages[${index}]: ambience "${ambience}" requires ${ambienceInfo.visualWeather} visual, but weather.kind is "${weatherKind}"`
-        );
-      }
-    }
+    // Water and ripple are cross-compatible
+    if ((requiredWeather === "water" || requiredWeather === "ripple") &&
+        (actual === "water" || actual === "ripple")) continue;
 
-    // Rule 2: If weather.kind is explicitly visual (rain/fire/wind/water/ripple),
-    // ambience should be from a matching category
-    const explicitVisualWeather = new Set(["rain", "fire", "wind", "water", "ripple"]);
-    if (explicitVisualWeather.has(weatherKind.toLowerCase())) {
-      if (ambienceInfo && ambienceInfo.visualRequired) {
-        if (!isWeatherCompatible(weatherKind, ambienceInfo.visualWeather)) {
-          // Already caught by Rule 1 above if both sides are explicit; skip duplicate
-        }
-      } else if (ambienceInfo && !ambienceInfo.visualRequired) {
-        // weather is explicit visual but ambience is non-visual — warn
-        failures.push(
-          `audio-weather mismatch stages[${index}]: weather.kind "${weatherKind}" expects matching audio, but ambience "${ambience}" is non-visual (${ambienceInfo.visualWeather})`
-        );
-      }
-    }
+    failures.push(
+      `audio-weather mismatch stages[${index}]: ambience "${ambience}" requires ${requiredWeather} visual, but weather.kind is "${weatherKind}"`
+    );
   }
 }
 

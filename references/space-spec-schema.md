@@ -93,12 +93,14 @@ Recommended shape:
 
 ## Audio-Weather Consistency
 
-Every stage must keep its `ambience` and `weather.kind` physically consistent:
+The following ambience→weather pairings are mandatory (see the mapping in `effects-recipes.md` → Audio-Weather Coupling):
 
-- If the stage ambience corresponds to a `visualRequired: true` asset in `audio-manifest.json`, then `stage.weather.kind` must be a matching visual type (see the mapping in `effects-recipes.md` → Audio-Weather Coupling).
-- If `stage.weather.kind` is `rain`, `fire`, `wind`, `ripple`, or `water`, the stage `ambience` should be from a matching audio category. Prefer assets from the same row in the Audio-Visual Mapping table.
-- Do not use generic `dust` or `fog` as a substitute for明确 weather types (`rain`, `fire`, `water`) when the ambience is clearly rain, fire, or water.
-- Indoor ambience assets (`a-small-library`, `cafe-ambience`, `city-apartment`) pair with `indoor-ambient` or neutral textures, not with rain/fire/wind/water weather.
+- Rain audio (`drizzle`, `moderate-rain`, `rain-on-the-window`, `thunder-freight`) → `weather.kind` must be `rain` or `storm-rain`
+- Fireplace audio (`fireplace-crackling`) → `weather.kind` must be `fire` or `embers`
+- Wind audio (`soft-wind`, `distant-breeze`, `forest-wind-with-birds`, `windstorm`) → `weather.kind` must be `wind`
+- Water audio (`lake-wavelet`, `sea-and-seagull-wave`, `mountain-stream`) → `weather.kind` must be `ripple` or `water`
+
+All other ambience/weather combinations have no coupling requirement.
 
 ## Stage Derivation
 

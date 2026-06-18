@@ -29,9 +29,7 @@
       "id": "birds",
       "label": "Birdsong",
       "file": "nature/birds.mp3",
-      "mood": ["morning", "nature", "birds"],
-      "visualWeather": "ambient-nature",
-      "visualRequired": false
+      "mood": ["morning", "nature", "birds"]
     },
     {
       "id": "forest-wind-with-birds",
@@ -45,9 +43,7 @@
       "id": "night-sound-in-village-field",
       "label": "Village field at night",
       "file": "nature/night-sound-in-village-field.mp3",
-      "mood": ["night", "rural", "insects"],
-      "visualWeather": "ambient-nature",
-      "visualRequired": false
+      "mood": ["night", "rural", "insects"]
     },
     {
       "id": "lake-wavelet",
@@ -127,17 +123,13 @@
       "id": "a-small-library",
       "label": "Small library",
       "file": "indoor/a-small-library.mp3",
-      "mood": ["library", "quiet", "indoor"],
-      "visualWeather": "indoor-ambient",
-      "visualRequired": false
+      "mood": ["library", "quiet", "indoor"]
     },
     {
       "id": "cafe-ambience",
       "label": "Cafe ambience",
       "file": "indoor/people-talking-at-cafe-ambience-6159.mp3",
-      "mood": ["cafe", "voices", "indoor"],
-      "visualWeather": "indoor-ambient",
-      "visualRequired": false
+      "mood": ["cafe", "voices", "indoor"]
     },
     {
       "id": "fireplace-crackling",
@@ -151,9 +143,7 @@
       "id": "city-apartment",
       "label": "City apartment",
       "file": "indoor/city-apartment.mp3",
-      "mood": ["city", "apartment", "background"],
-      "visualWeather": "indoor-ambient",
-      "visualRequired": false
+      "mood": ["city", "apartment", "background"]
     },
     {
       "id": "rain-on-the-window",
