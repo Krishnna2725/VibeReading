@@ -2,65 +2,154 @@
 
 ## Role
 
-用一台明确、可理解的书籍主题仪器，为思想、系统和非虚构作品建立可感知的阅读入口。
+Build a CRT Reading Receiver: a physical device that tunes into the book as a signal.
+The reader changes stages by tuning channels, stabilizing frequency, or scanning bands.
+
+This template is usually built entirely with DOM/CSS/SVG/p5. Do not generate a large background image by default.
 
 ## Best For
 
-思想、社会观察、系统、媒介、科技、哲学、科学与结构性非虚构。
+Thought, social observation, systems, media, technology, politics, philosophy, nonfiction, dystopia, and books that feel like a signal being decoded.
 
 ## Avoid
 
-仪器隐喻只会制造距离，或书籍更适合风景、声音仪式、旅途与象征物时。
+Books whose main experience is landscape contemplation, travel, music memory, or mythic card symbolism may fit other templates better.
 
-## Primary Production Mode
+## Stable Object Skeleton
 
-默认 DOM / CSS / Canvas。
-Three.js 或 CSS 3D 仅在能明显增强核心仪器质感和操作时使用。
+The receiver must include:
 
-## Creative Budget
+```text
+screen
+channel controls
+tuning control
+volume control
+power / guide control
+small LCD timer
+signal / noise feedback
+```
 
-- 一个核心仪器；
-- 不超过五个主要控件；
-- 一个清晰的书籍主题参数隐喻；
-- 物理材质、声音反馈与目录阶段显示变化。
+The companion control must be inside the device. Do not add a separate generic companion panel.
 
-## Visual Preset
+## Style Strategy
 
-生图生成一张背景环境、仪器表面或屏幕纹理。仪器主体由前端构建，并保持稀疏、可理解。
+The agent chooses the style according to the book.
+Allowed directions include:
 
-## BGM Preset
+- Bauhaus
+- Constructivism
+- Atompunk
+- Art Deco
+- Neo-Futurism
+- Cyberpunk
+- Steampunk
+- Neo-Brutalism
+- Minimalism
+- Biomorphism
+- 80s nostalgic television
 
-全书一首纯音乐 BGM。仪器可以调节 BGM 音量、环境声或滤波表达，但不能切换多首音乐。
+The style must support the idea of a "reading receiver": screen, channel scale, tuning, buttons, knobs, LCD timer, signal/noise.
 
-## Weather Preset
+Before coding, answer internally:
 
-热浪、浮尘、风暴光、冷雾或雨噪。天气可以进入屏幕信号与仪器表面。
+1. What era, culture, or imagined product world does this receiver come from?
+2. How does it embody the book's atmosphere?
+3. How does the screen show stage text and SVG/signal graphics?
+4. How do channel/frequency controls switch reading stages?
+5. How is the small LCD timer physically embedded?
 
-## Companion Preset
+Do not display these questions in the page.
 
-`Control Surface`
+## Screen
 
-用明确标签承载入静、天气、声音、目录阶段、计时和番茄钟。
+The screen is the emotional center.
 
-## Entry Guide Behavior
+It may show:
 
-点击开始后仪器通电，噪声降低，BGM 或环境音出现，无剧透入静文字像稳定信号一样逐步显现。
+- current stage label;
+- readingHint as a signal caption;
+- waveform or scanline SVG;
+- subtle static, interference, ghost image, or focus bloom;
+- guide text during pre-reading.
 
-## Stage Expression
+Do not put long paragraphs on the screen. Keep it readable and atmospheric.
 
-各阶段改变屏幕内容、信号稳定度、灯光、天气、文字和局部材质。阶段切换不能要求用户破解参数。
+## Stage Switching
 
-## Forbidden
+Prefer a channel or tuning metaphor:
 
-- NASA 控制室和十几个仪表；
-- 现代后台数据面板；
-- 无意义参数；
-- 强制调频、扫描或解锁流程；
-- 为展示 Three.js 而牺牲阅读与稳定性。
+- rotary tuner with stage positions;
+- horizontal frequency scale;
+- mechanical channel buttons;
+- scanning bar that locks into the selected stage.
 
-## Acceptance
+If there are many stage labels, do not make large cards. Use a dial, channel strip, or compact buttons.
 
-- 用户能快速理解这是一台什么仪器；
-- 每个主要控件作用清楚；
-- 阶段切换无需学习复杂规则；
-- Three.js 缺失时核心体验仍完整。
+The HTML must include real `[data-vr-stage]` controls shaped as receiver parts.
+
+## Timer
+
+The timer must feel like part of the device:
+
+- small LCD;
+- seven-segment display;
+- paper counter;
+- oscilloscope corner readout;
+- maintenance display.
+
+Do not let stage controls push the timer out of the 16:9 viewport.
+
+## Weather / Atmosphere
+
+Instrument weather can be:
+
+- signal noise;
+- scanlines;
+- dust in CRT glow;
+- rain reflected on screen glass;
+- electromagnetic shimmer;
+- paper tape flutter;
+- weak broadcast waves.
+
+Each stage should try to have a distinct signal/weather quality.
+
+## Entry Guide
+
+The guide feels like tuning into a stable frequency.
+
+- Start action powers the device.
+- First step: screen glow and base noise.
+- Later steps: scanline stabilizes, channel pointer moves, signal becomes readable.
+- Text may appear on CRT, LCD, paper tape, or device label.
+- Every step waits for user click.
+
+## Companion Control
+
+Required functions:
+
+- replay guide: power/guide button;
+- stage switcher: channel/tuning control;
+- weather strength: signal/noise or atmospheric strength;
+- sound: volume/power control;
+- timer/pomodoro: LCD and small mode button.
+
+All controls are embedded directly into the receiver device and are always visible. Do not collapse or hide them behind a toggle. Do not duplicate these controls outside the receiver.
+
+## Visual Anti-Patterns
+
+UI control vocabulary for instrument:
+
+- Continuous values (volume, tuning, weather): rotary knob, dial with pointer, slider as physical fader
+- Discrete states: rocker switch, channel push button, indicator LED
+- Timer: LCD seven-segment, oscilloscope readout, paper counter
+- Stage switching: channel buttons, frequency scale, scanning bar
+- Do not use: generic HTML buttons with text labels, default dropdown selects
+
+Avoid:
+
+- flat rectangle TV with generic buttons;
+- unstyled black screen with text;
+- giant bottom-right panel;
+- labels like "style strategy" visible in UI;
+- too many stage cards;
+- tiny timer below the fold.

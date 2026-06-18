@@ -1,160 +1,238 @@
 ---
 name: vibereading
 description: >
-  为书籍生成 16:9 阅读陪伴网页。每次阅读从一段有声音的短暂入静开始，
-  随后进入由主视觉、单首纯音乐 BGM、天气、基于目录划分的阅读阶段和模板专属陪伴组件构成的空间。
+  Generate a 16:9 desktop VibeReading companion page for a book. Use this skill
+  when the user asks for an atmospheric reading space with a pre-reading guide,
+  sound, weather, directory-based reading stages, a template-specific companion
+  control, and a stable file://-friendly HTML/CSS/JS output.
 ---
 
 # VibeReading V2
 
-为一本书生成安静、个性化、可长期停留的阅读陪伴空间。
-它不是剧情导览、复杂互动装置、解谜游戏、电子书阅读器或生产力仪表盘。
+> **Single authority.** This file is the definitive generation contract.
+> If any other document in this project contradicts SKILL.md, follow SKILL.md.
 
-## 核心契约
+Create a quiet, book-specific reading companion space. It is not a plot guide,
+not a puzzle game, not an ebook reader, and not a generic dashboard.
 
-每次输出必须具备：
+## Output Contract
 
-- 一个从 `window`、`vinyl`、`instrument`、`route`、`symbols` 中选择的模板；
-- 每次刷新后重新出现的入静首页；
-- 用户点击“开始”后立即出现的 BGM 或环境音；
-- 一首严格纯音乐 BGM，以及 BGM 失败时的环境音兜底；
-- AI 主动检索目录后，按章节进度聚合出的 3–6 个可手动切换阶段；
-- 持续、克制、可调强度的天气或氛围效果；
-- 模板专属陪伴组件；
-- 阅读计时与番茄钟；
-- 16:9 首屏完整呈现；
-- `file://` 双击可用、键盘可操作，并支持减少动态效果。
+Every output must include:
 
-浏览器通常禁止零操作有声自动播放。因此“默认播放 BGM”的实现方式统一为：
+- one selected template: `window`, `vinyl`, `instrument`, `route`, or `oracle`;
+- a pre-reading guide that appears again after every page refresh;
+- sound immediately after the user clicks Start: play BGM first, fall back to ambience if BGM fails;
+- exactly one instrumental BGM for the whole book;
+- 3 to 6 reading stages derived from the real table of contents or chapter order;
+- visible weather or atmospheric motion, adjustable for the current stage;
+- a template-specific companion control whose visibility behavior is defined by the selected template;
+- reading timer plus a 25-minute pomodoro mode;
+- complete 16:9 desktop presentation;
+- `file://` double-click support, keyboard operability, and reduced-motion support.
+
+Do not build mobile-first layouts. Optimize for a 16:9 horizontal desktop viewport.
+
+Browser autoplay rules mean the page cannot play audible sound before user interaction:
 
 ```text
-页面加载 → 入静首页 → 用户点击开始 → 立即播放 BGM；失败则立即播放环境音
+page load -> guide homepage -> user clicks Start -> BGM starts; if it fails, ambience starts
 ```
 
-入静引导期间不得无声。
+The guide must not auto-advance. Start, Continue, Skip, and Enter Reading Space must all be user-clicked.
 
-## 上下文预算
+## Context Budget
 
-只读取当前步骤需要的文件：
+Read only what the current step needs.
+
+Always read:
 
 ```text
-始终读取：  SKILL.md
-选择模板：  references/template-index.md
-设计实现：  仅 references/templates/[selected].md
-生成规格：  references/space-spec-schema.md
-入静引导：  references/entry-guide.md
-陪伴组件：  references/companion-components.md
-生成图片：  references/image-generation.md
-选择音频：  references/audio-manifest.json
-生成 BGM： references/music-generation.md
-可选天气：  references/effects-recipes.md
-动画增强：  references/motion-guidance.md
+SKILL.md
+references/template-index.md
+references/templates/[selected-template].md
+references/space-spec-schema.md
+references/audio-manifest.json
 ```
 
-不得读取未选中的模板，不得读取 Git 历史中的旧模板，生成过程中不要读取 `references/tests/`。
-
-## 工作流
-
-1. 获取书名与可选作者名。
-2. 搜索足够可靠的背景信息与目录；目录过长时提取章节顺序、篇幅分布和结构转折。
-3. 为未读者设计无剧透入静引导，帮助读者进入本书，不单独生成额外理解框架。
-4. 读取 `template-index.md`，选择恰好一个模板。
-5. 仅读取选中模板；根据目录与章节进度聚合 3–6 个阅读阶段，并定义书籍身份。
-6. 读取 `space-spec-schema.md`，生成 `space-spec.json`。
-7. 读取 `music-generation.md`，用 `scripts/bgm-gen.py start` 启动后台 BGM 任务；不得自行等待接口或跳过。
-8. 读取 `image-generation.md`，先把设计要求转译成纯视觉 Prompt，再调用生图工具；仅 Window 可基于母图生成最多三张变化图。
-9. 读取音频清单，选择必要环境音作为氛围与 BGM 失败兜底。
-10. 运行 `python scripts/scaffold-output.py --output-dir "output/<任务>"` 创建标准页面骨架；不要自行重建或内联共享运行时。
-11. 只修改书籍专属的 `app.js`、`style.css` 和主体场景标记。
-12. 复制实际引用的图片与音频。
-13. 用 `scripts/bgm-gen.py status` 验收后台 BGM，并运行纯代码集成校验。
-
-## 输出结构
+Read on demand:
 
 ```text
-output/[YYYY-MM-DD-《书名》-测试目的]/
+references/visual-design-contract.md   high-end visual direction
+references/entry-guide.md              pre-reading guide design
+references/image-generation.md         image prompt and asset rules
+references/music-generation.md         BGM generation workflow
+references/effects-recipes.md          p5 weather and atmospheric effects
+references/technical-contract.md       runtime state, controls, validation
+```
+
+Do not read unselected templates. Do not read old templates from Git history. Do not read
+`references/tests/` while generating a page unless a test failure gives no other actionable clue.
+
+## Workflow
+
+1. Get the book title and optional author.
+2. Search for reliable background information and the table of contents. Do not wait for the user to provide the TOC.
+3. Choose exactly one template from `template-index.md`.
+4. Read only that template file.
+5. Define the book identity:
+
+```text
+visualMotif, musicDirection, textVoice, motionCharacter, uiLanguage, avoid
+```
+
+6. Group the TOC into 3 to 6 spoiler-safe reading stages. Each stage needs:
+
+```text
+label, sourceRange, chapters, readingHint, weather, light, ambience, motion, uiAccent
+```
+
+7. Read `visual-design-contract.md` and set a concrete visual system before writing UI.
+8. Read `entry-guide.md` and design the guide as a short book-specific ceremony with sound, typography, focus, p5/light/object feedback, and click-by-click pacing.
+9. Read `space-spec-schema.md` and write `space-spec.json`.
+10. Read `music-generation.md`; use `scripts/bgm-gen.py start` for new BGM generation. Do not poll the remote API manually and do not skip because it is slow.
+11. Read `image-generation.md` only when the selected template needs generated images.
+12. Select required ambience from `audio-manifest.json`.
+13. Read `technical-contract.md`.
+14. Run:
+
+```bash
+python scripts/scaffold-output.py --output-dir "output/<task-folder>"
+```
+
+15. Modify only the book-specific output files unless the user explicitly asks to improve the skill itself.
+16. Copy every actually referenced local image/audio asset into the output folder. **Asset reuse only**: copy image and audio files from previous outputs if they fit the new book. Never reuse `app.js`, `style.css`, `space-spec.json`, or `index.html` from a prior generation — those contain book-specific implementation and must be written fresh each time.
+17. Run deterministic code validation.
+
+## Output Structure
+
+```text
+output/YYYY-MM-DD-BookTitle-purpose/
 ├── index.html
 ├── style.css
 ├── app.js
 ├── space-spec.json
 ├── bgm-meta.json
-├── concept-image.png
+├── concept-image.png          # required only for image-driven templates
 ├── prompts/
-│   ├── image.txt
+│   ├── image.txt              # required only when image generation is used
 │   └── bgm.txt
-├── stage-2.png               # 仅 Window 按需生成
-├── stage-3.png               # 仅 Window 按需生成
-├── stage-4.png               # 仅 Window 按需生成
+├── stage-2.png                # optional, mainly Window
+├── stage-3.png
+├── stage-4.png
 └── assets/
     └── audio/
         ├── bgm.mp3
         └── ...
 ```
 
-HTML、CSS 与 JS 必须拆分。复制并外链共享运行时，禁止复制后再次内联、禁止重复加载。关键配置定义在 `app.js`，不得依赖 `fetch()` 本地 JSON。
+Keep HTML, CSS, and JS separate. Copy and link the shared runtime; do not inline it and do not load it twice.
+Define page configuration in `app.js`. Do not depend on `fetch()` for local metadata.
 
-## 书籍身份与阶段
+## Stage Rules
 
-先定义整本书共享的：
+Stage count is decided by the agent from the real book structure:
+
+- minimum: 3 stages;
+- maximum: 6 stages;
+- group by chapter sequence, section breaks, or structural turns;
+- never replace TOC-based stages with pure emotion stages;
+- keep all labels and hints spoiler-safe for readers who have not read the book.
+
+Except for `window`, stages usually reuse one main visual. Express stage change through weather,
+light, ambience, short text, object state, and motion.
+
+`readingHint` must appear inside the selected template's own companion control or main object.
+Do not create a second generic stage panel, floating tag cloud, or persistent text bubble outside the template.
+If a scene needs text, show at most one short line after stage change, then fade it out.
+
+## Companion Control
+
+Each template must embed these controls in its own visual language:
+
+- replay guide;
+- current-stage weather strength: off / low / medium;
+- sound play/pause/volume;
+- 3 to 6 stage switcher;
+- reading timer: pause / resume / reset;
+- 25-minute pomodoro.
+
+After the guide, each template defines its own companion visibility: some collapse to a small entry and expand on click, others embed controls directly into the device. Follow the selected template's companion control spec.
+Never generate the old generic bottom-right "Reading Companion" card.
+
+## Template UI Language
+
+Each template has a distinct design language for controls. Do not mix languages across templates.
+
+- **vinyl / instrument**: Use skeuomorphic controls — rotary knobs for continuous values (volume, tuning, weather intensity), toggle switches or mechanical buttons for discrete states (sound on/off, timer mode), LCD or seven-segment for timer, groove marks / channel buttons / liner tabs for stage switching. Do not label controls with raw text like "mute", "volume", "start" on the control surface.
+- **window**: Use frosted glass and modern UI — glass-edge tabs, condensation marks, paper slips as control entry points. The design language is transparent, layered, and ambient. One fixed component style can be reused for all window pages.
+- **route**: Use paper and travel textures — ticket stubs, stamps, signposts, map legends, compass plates. The design language is worn, folded, inked, and stamped.
+- **oracle**: Use card and cloth textures — card faces, linen cloth, candle glow, ink wash. The design language is ritual, slow, and symbolic.
+
+Rule: do not try to render materials that CSS cannot achieve (e.g. real wood grain, photorealistic metal). Keep textures achievable with gradients, shadows, and SVG.
+
+## Layering Model
+
+Before writing code, make one decision for each layer:
 
 ```text
-visualMotif, musicDirection, textVoice, motionCharacter, uiLanguage, avoid
+Background     main visual and safe composition area
+Atmosphere     weather, particles, light, breath, texture, lines, depth
+Spatial Object selected template's main object
+Entry Guide    text hierarchy, focus, p5/light/object feedback
+Companion UI   template-defined companion entry and controls
+Audio          BGM, ambience, fades, fallback behavior
+App State      how stage, sound, timer, guide, and weather affect the scene
 ```
 
-再根据真实目录和章节进度，定义 3–6 个阶段各自的：
+These decisions may appear in `space-spec.json`, `app.js`, or `style.css`, but must not appear as visible
+labels in the final page. Never display agent-facing labels such as `Deck Palette`, `Symbol System`,
+`Style Strategy`, `visualMotif`, `prompt`, or `design strategy`.
 
-```text
-label, sourceRange, chapters, readingHint, weather, light, ambience, motion, uiAccent
+## Old Output Reuse
+
+Old `output/` folders may be used as **asset libraries only**. An agent inspecting a prior output may:
+
+- copy media assets: audio files, images, textures, fonts;
+- read asset paths and assess asset suitability for the new book.
+
+An agent must **not** copy from old outputs:
+
+- HTML structure or DOM layout;
+- CSS architecture or stylesheet rules;
+- JavaScript app logic, event wiring, or interaction framework;
+- `space-spec.json`, `app.js`, or `index.html` structure.
+
+If an old output is inspected, use it only for asset discovery, not as a page implementation reference.
+Every page must be authored fresh for the current book.
+
+## Visual Assets
+
+- `window`, `vinyl`, and `route` normally use one generated 16:9 main image.
+- `instrument` and `oracle` normally build the main object with DOM/CSS/SVG/p5 and do not call image generation.
+- Convert design requirements into pure visual prompts before using an image tool.
+- Generated images must contain no text, letters, numbers, logos, watermarks, signs, labels, UI, or panels.
+- `window` base image must show a complete window reading space: window plus outside view at least 70% of frame; visible outside view at least 55%; indoor furniture at most 30%.
+- Only `window` may create up to three image-to-image weather/view variants from the base image.
+
+## Sound
+
+- Generate or reuse exactly one BGM for the whole book.
+- BGM generation requests must include `is_instrumental: true`.
+- Final BGM status must be `generated`, `reused`, or `failed`, never `skipped`.
+- After user clicks Start, play BGM immediately.
+- If BGM fails, play ambience immediately.
+- Do not wait for local JSON or remote generation before deciding playback paths.
+- Copy only actually used audio assets.
+
+## Validation
+
+Run deterministic checks only:
+
+```bash
+node --check "output/<task-folder>/app.js"
+node references/tests/evaluate-vibereading-output.mjs "output/<task-folder>"
 ```
 
-阶段数量由 AI 根据目录结构主动决定，下限 3 个、上限 6 个。章节较多时应按结构转折和阅读进度聚合，不得用纯情绪阶段替代目录依据。
-各阶段必须有可感知变化，但仍属于同一本书；提示无剧透，不解释后续剧情。
-除 Window 外，阶段通常复用同一张主图，通过天气、光线、环境声、短暂文字和动画表达变化。
+Use validation failures to fix deterministic issues only. Do not spend time writing aesthetic self-reviews.
 
-`readingHint` 已由预制陪伴面板展示。书籍专属代码不得再创建第二张阶段卡、说明面板或控制面板；不得生成持续漂浮的文字胶囊、标签群或随机游走文字。若场景内确有必要出现文字，每次最多一句，必须在阶段切换后短暂显现并自动退场，不能长期占据阅读画面。
-
-## 一级能力
-
-每个模板的预制陪伴组件必须提供：
-
-- 重新开始入静引导；
-- 天气强度：关闭 / 低 / 中；
-- 声音播放 / 暂停 / 音量；
-- 3–6 个目录阶段切换；
-- 阅读计时：暂停 / 继续 / 重置；
-- 25 分钟番茄钟。
-
-组件必须符合模板表达，默认安静，不遮挡首屏主体。
-
-## 图片
-
-- 默认生成一张 16:9 主图；
-- 模板规则必须先转译成纯视觉 Prompt，不能原样输入生图工具；
-- 图片不得出现任何文字、字符、数字、Logo、水印、标签、招牌、UI 或面板；
-- Window 的母图必须直接包含完整窗边空间；前端不得重画复杂窗框；
-- Window 中窗户与窗外景色至少占 70%，窗外可见景色至少占 55%，室内与家具合计不得超过 30%；
-- Window 可基于母图进行最多三次图生图，只改变窗外风景、天气、季节、时间与光线；
-- Vinyl、Instrument、Route、Symbols 默认只生成一张主图。
-
-## 声音
-
-- 每本书只生成一首 BGM；
-- 必须声明 `is_instrumental: true`；
-- 最终状态只能为 `generated` 或 `failed`；不得因为等待时间较长、接口调用方式不明或资源生成不方便而写成 `skipped`；
-- 用户点击开始后立即尝试播放 BGM；
-- BGM 不可用时立即播放环境音；
-- 页面不能通过 `fetch()` 元数据后才发现 BGM；
-- 只复制实际使用的音频。
-
-## 轻量校验
-
-不要让生成 Agent 对自己的审美和内容质量写长篇自评。交付前只做确定性的运行底线检查：
-
-- 输出文件齐全；
-- `space-spec.json` 与 `bgm-meta.json` 可解析；
-- `app.js` 无语法错误；
-- HTML 正确加载 CSS 与 JS；
-- HTML 引用的本地资源存在；
-- 运行纯代码集成校验，确认入静、声音、阶段切换、计时、番茄钟、双击运行约束与显示比例均可用。
-
-书籍贴合度、画面气质和美术调参交给人类用户判断，不属于自动校验。
+Do not attempt visual/browser-based validation. Visual review is handled separately by CASE with dedicated tooling. The generating agent's job is to deliver quality output fast — do not waste tokens on visual self-inspection.

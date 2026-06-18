@@ -2,75 +2,102 @@
 
 ## Role
 
-用一台书籍专属唱机，把开始阅读变成落针播放的声音仪式。
+Use a record player as a reading ritual. The book becomes one instrumental record: the needle drops once, and stages feel like liner notes, groove positions, sleeve marks, or side changes.
+
+The whole book still uses one BGM.
 
 ## Best For
 
-记忆、时间、音乐性文本、私人史、复古气质、围绕声音或循环展开的作品。
+Memory, time, music-like prose, private history, nostalgia, albums, letters, and books that feel intimate or cyclical.
 
-## Avoid
+## Stable Object Skeleton
 
-唱机隐喻与书籍气质无关，或需要大量不同场景图片才能成立的书。
-
-## Primary Production Mode
-
-预制前端对象主导。
-
-复用稳定的唱机主体、唱片、唱臂、旋钮、播放状态与声音逻辑。生图生成一张书籍专属专辑封套 / label。
-
-## Creative Budget
-
-- 封套与 label；
-- 书籍专属硬件材质、色彩和铭牌；
-- 落针、旋转和声音反馈；
-- 各目录阶段的 Liner Notes、灯光、天气与文字。
-
-## Visual Preset
-
-生图生成一张可同时用于封套与唱片 label 的图像。
-唱机必须具有对象感和物理反馈，但不能变成复杂机械演示。
-
-## BGM Preset
-
-全书只有一张唱片和一首纯音乐 BGM。
-不生成多唱片架、多专辑或多音轨。
-
-## Weather Preset
-
-浮尘、热浪、窗外雨影、薄雾、文字雨或缓慢风。天气应落在设备、房间和唱片材质上。
-
-## Companion Preset
-
-`Deck Controls`
+Build a strong record player scene:
 
 ```text
-Power / Start   开始入静与声音授权
-Weather         天气强度
-Volume          声音
-Stage           3–6 个目录阶段
-Timer           阅读计时与番茄钟
-Liner Notes     入静与阶段文字
+.vr-scene                          (full viewport, 16:9)
+  .vr-vinyl-player                  (turntable container, centered or slightly off-center)
+    .vr-vinyl-platter               (spinning record disc, CSS animation or p5)
+      .vr-vinyl-label               (center label or mark, stage-aware color)
+    .vr-vinyl-tonearm               (arm with pivot, rests on record when playing)
+    .vr-vinyl-base                  (player body, wood/metal/plastic material)
+  .vr-vinyl-sleeve                  (album sleeve or liner notes area, optional image)
+  .vr-weather-layer                 (dust, lamplight, rain outside — pointer-events: none)
+  [data-vr-stage]                   (stage marks on groove, liner tabs, or sleeve)
+  [data-vr-companion]               (companion entry: volume knob, preamp switch, sleeve flap)
+  .vr-guide (data-vr-guide)         (pre-reading guide overlay)
 ```
 
-## Entry Guide Behavior
+The record, tonearm, and sleeve must feel like physical objects with material. Do not make it only a flat circle with buttons.
 
-点击开始后设备通电，唱片旋转，唱针落下，BGM 或环境音淡入，短文字引导读者进入书籍。
+## Production Mode
 
-## Stage Expression
+Use DOM/CSS/SVG/p5 for the player and motion.
+Optionally generate one cover/sleeve or background image if it improves the book identity.
 
-阶段切换不更换 BGM。通过 Liner Notes、灯光、天气、文字、材质状态和唱机反馈表达变化。
+## Stage Switching
 
-## Forbidden
+Stage switching does not change BGM.
+Express stages through:
 
-- 多唱片架、多音轨和拖放多张唱片；
-- 现代流媒体播放器 UI；
-- 只有装饰唱机，没有清晰播放状态；
-- 复杂 Three.js 房间或自由镜头；
-- 大段文字直接盖在旋转唱片上。
+- tonearm position;
+- label marker;
+- groove highlight;
+- liner note tab;
+- sleeve insert;
+- side/track cue without implying multiple songs.
 
-## Acceptance
+If there are many chapters, use a compact groove scale or liner tabs, not large cards.
 
-- 用户一眼理解唱机与播放；
-- 点击开始后立即有声音；
-- 唱片与唱臂反馈清楚；
-- 目录阶段可切换，但始终是一台唱机与一首 BGM。
+## Companion Control
+
+The control must belong to the player. Controls are always visible as part of the record player — do not collapse or hide them behind a toggle:
+
+- stage switcher as groove/track selector;
+- weather as surface dust, room rain, lamp haze, or paper atmosphere;
+- sound control as volume knob or preamp switch;
+- timer as small counter, tape label, or sleeve stamp;
+- replay guide as needle-lift or power action.
+
+No external generic companion card.
+
+## Weather / Atmosphere
+
+Vinyl weather can be:
+
+- dust in lamplight;
+- rain outside the listening room;
+- paper fibers on sleeve;
+- groove shimmer;
+- smoke-like room haze;
+- low amber static.
+
+Each stage should adjust light, dust, sleeve texture, or groove behavior.
+
+## Entry Guide
+
+The guide feels like a needle-drop ceremony.
+
+- Start powers the player and begins sound.
+- First step: record rotates slowly; tonearm hovers.
+- Later steps: needle descends, groove glow responds, liner note text appears.
+- Text should live near sleeve, label, tonearm, or liner notes, not as generic centered subtitles.
+- Every step waits for user click.
+
+## Visual Anti-Patterns
+
+UI control vocabulary for vinyl:
+
+- Continuous values (volume, weather intensity): rotary knob with conic-gradient brass/bakelite surface, hidden range input for interaction, rotation dot indicator
+- Discrete states (sound toggle, timer mode): mechanical toggle switch or small push button
+- Timer display: tape counter, sleeve stamp, or small LCD embedded in player base
+- Stage switching: groove marks, liner tabs, or label position indicators
+- Do not use: generic HTML buttons with text labels ("mute", "start", "play"), default range sliders, dropdown selects, checkboxes
+
+Avoid:
+
+- many records or album tracks unless explicitly requested;
+- default audio sliders;
+- flat black disc with no material;
+- long explanatory panels;
+- generic bottom-right card.

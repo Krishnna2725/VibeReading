@@ -2,77 +2,111 @@
 
 ## Role
 
-用一处可持续凝视的窗边空间，让读者通过风景、天气、光线和短文字进入书籍。
+Use a window-side reading space to let the reader look, wait, and tune weather.
+The book is expressed through outside view, glass, weather, light, and a few short text moments.
 
 ## Best For
 
-文学小说、自然、地方、季节、孤独、城市观察、等待、回忆。
+Literary fiction, nature, place, seasons, solitude, urban observation, waiting, memory, and books with strong atmosphere.
 
-## Avoid
+## Stable Object Skeleton
 
-主要依赖系统参数、机械对象、旅途路线或强象征物才能成立的书。
-
-## Primary Production Mode
-
-图像主导。
-
-生图直接生成完整窗边阅读空间。前端不重画复杂窗框、窗台和拟物装饰，只负责天气、文字、入静引导、阶段切换和陪伴组件。
-
-## Creative Budget
-
-- 一张完整母图；
-- 最多三张基于母图的图生图变化；
-- 各目录阶段的天气、光线、文字与声音；
-- 不遮挡主体的毛玻璃陪伴组件。
-
-## Visual Preset
-
-母图为 16:9。窗户与窗外景色至少占画面 70%，窗外可见景色至少占 55%，室内与家具合计不得超过 30%。默认不生成椅子、沙发、床、台灯、书桌和书架作为主体。
-
-图生图只改变：
+The image is the main visual, but the template still needs a surrounding DOM structure:
 
 ```text
-窗外风景、天气、季节、时间、光线
+.vr-scene                          (full viewport, 16:9)
+  img.vr-scene-image               (base image or current stage variant)
+  .vr-weather-layer                 (p5 or canvas weather overlay, pointer-events: none)
+  .vr-window-frame                  (CSS border/shadow framing the glass edge)
+  [data-vr-stage]                   (stage indicator strip or glass-edge marks)
+  [data-vr-companion]               (companion entry: condensation mark, latch, paper slip)
+  .vr-guide (data-vr-guide)         (pre-reading guide overlay)
 ```
 
-必须保持室内结构、观察视角、主体和书籍视觉身份连续。
+The frame, stage indicator, and companion entry sit on top of the image but must not dominate it. Weather renders behind the frame but in front of (or blended with) the image.
 
-## BGM Preset
+## Production Mode
 
-全书一首纯音乐 BGM。各阶段通过环境音、天气和光线表达变化。
+Image-led.
+Generate a complete 16:9 window-side scene as the base image. The frontend should add weather, guide, stage transitions, and the template control; it should not redraw a complex window.
 
-## Weather Preset
+## Image Composition Contract
 
-雾、风、雨、雪、凝露、光尘或缓慢阴影。
-天气是画面的呼吸，不是廉价粒子层。
+The image prompt must include:
 
-## Companion Preset
+```text
+The window and outside view occupy at least 70% of the frame.
+The visible outside scenery occupies at least 55% of the frame.
+Indoor furniture and interior decor occupy no more than 30% of the frame.
+Do not make chairs, sofas, beds, desk lamps, bookshelves, or desks the main subject.
+No text, no letters, no numbers, no logo, no watermark, no signage, no labels, no UI, no panels.
+```
 
-`Frosted Glass Panel`
+The generated image may include interior context, but the window and outside world must dominate.
 
-面板贴近右侧或右下角，面积小，不遮挡主体。包含入静、天气、声音、目录阶段、计时和番茄钟。
+## Stage Switching
 
-面板必须直接显示当前阶段名与对应章节范围；阶段按钮只出现一次。天气与计时收纳为二级工具，不得把所有控件平铺成一团。
+Window may create one base image plus up to three image-to-image variants.
+Variants may change:
 
-## Entry Guide Behavior
+```text
+outside view, weather, season, time of day, light
+```
 
-点击开始后声音淡入，窗外光线和天气逐渐显现，无剧透的入静文字进入视野。
+Do not change:
 
-## Stage Expression
+```text
+camera angle, window geometry, room structure, book identity
+```
 
-阶段共用一张母图，并可使用最多三张连续窗景变化图。图片数量不必与阶段数量一致；其余差异通过天气、光线、环境声、文字和局部 UI 表达。
+If only one image is available, use p5 weather, light overlays, glass texture, and color grading for stage changes.
 
-## Forbidden
+## Companion Control
 
-- 前端重新绘制复杂窗框、窗台或大型装饰 SVG；
-- 擦玻璃、拉窗帘等必须完成的复杂交互；
-- 静态壁纸上堆满控件；
-- 毛玻璃面板遮挡主体；
-- 四张图像像四个不同空间。
+After the guide, show only the small companion entry (condensation mark, latch, paper slip, glass-edge tab) by default. Expand the full control panel only after user click. The expanded control may sit along the frame or sill, but must not cover the window view.
 
-## Acceptance
+Required functions:
 
-- 首屏首先读作一处真实窗边阅读空间；
-- 阶段切换平滑，空间连续；
-- 画面始终是主角；
-- 入静结束后面板安静退居边缘。
+- replay guide;
+- stage switching;
+- weather strength for current stage;
+- sound;
+- reading timer and pomodoro.
+
+## Weather / Atmosphere
+
+Weather is the main expressive engine.
+
+Stage examples:
+
+- early: mist, weak dawn, light condensation;
+- middle: rain streaks, city reflections, stronger wind;
+- late: snow, night reflection, dark glass, distant lights.
+
+Low and medium levels must both be visible.
+
+## Entry Guide
+
+The guide feels like slowly seeing through glass.
+
+- Text appears near frame, sill, reflection, or dim interior.
+- Focus mask points to the outside view or glass surface.
+- Object feedback may be fog clearing, rain appearing, latch glow, or window light changing.
+- Skip is secondary, not an invitation to avoid the ceremony.
+
+## Visual Anti-Patterns
+
+UI control vocabulary for window:
+
+- All controls use frosted glass / modern UI language
+- One consistent component style: translucent pill buttons, glass-edge sliders, minimal icons
+- Control entry: condensation mark, latch, paper slip, glass-edge tab (expand on click)
+- No skeuomorphic knobs or mechanical textures
+
+Avoid:
+
+- interior furniture as main subject;
+- centered subtitle-only guide;
+- companion card floating far from the window;
+- stage chips covering the view;
+- image prompts that include UI instructions or text.

@@ -1,6 +1,8 @@
-# V2 SpaceSpec
+# Space Spec Schema
 
-只记录会直接改变页面的决策。字段内容使用中文。
+Write `space-spec.json` as the implementation source of truth. Keep it spoiler-safe and concise.
+
+Recommended shape:
 
 ```json
 {
@@ -9,7 +11,7 @@
     "author": ""
   },
   "template": {
-    "primary": "window|vinyl|instrument|route|symbols",
+    "primary": "window",
     "reason": ""
   },
   "bookDirection": {
@@ -20,31 +22,40 @@
     "uiLanguage": "",
     "avoid": []
   },
+  "visualDesign": {
+    "archetype": "",
+    "materialSystem": "",
+    "typography": "",
+    "palette": [],
+    "nestedArchitecture": "",
+    "motionChoreography": ""
+  },
   "entryGuide": {
     "durationSec": 20,
+    "soundRequiredAfterStart": true,
+    "layout": "",
+    "motion": "",
     "steps": [
-      {"id": "", "text": "", "visual": "", "audio": ""}
-    ],
-    "skipControl": true,
-    "soundRequiredAfterStart": true
-  },
-  "visual": {
-    "primaryPrompt": "",
-    "imageRole": "",
-    "safeArea": "",
-    "windowVariations": [],
-    "windowComposition": {
-      "windowAndExteriorMinPercent": 70,
-      "exteriorMinPercent": 55,
-      "interiorMaxPercent": 30
-    }
+      {
+        "id": "",
+        "eyebrow": "",
+        "text": "",
+        "emphasis": "",
+        "visual": "",
+        "focusWords": ["关键词1", "关键词2"],
+        "entryRegion": "sleeve-left | center | screen-right",
+        "objectCue": "tonearm-hover | needle-drop | power-on"
+      }
+    ]
   },
   "audio": {
-    "bgmPrompt": "",
     "bgmFile": "./assets/audio/bgm.mp3",
     "ambienceFiles": [],
-    "isInstrumental": true,
-    "fallback": ""
+    "bgmPrompt": "",
+    "isInstrumental": true
+  },
+  "weather": {
+    "defaultLevel": "low"
   },
   "stages": [
     {
@@ -53,52 +64,37 @@
       "sourceRange": "",
       "chapters": [],
       "readingHint": "",
-      "weather": "",
+      "weather": {
+        "kind": "",
+        "defaultLevel": "low"
+      },
       "light": "",
       "ambience": "",
       "motion": "",
-      "uiAccent": "",
-      "image": ""
+      "uiAccent": ""
     }
-  ],
-  "weather": {
-    "kind": "",
-    "levels": ["off", "low", "medium"],
-    "reducedMotionFallback": ""
-  },
-  "companion": {
-    "preset": "frosted-glass|deck-controls|control-surface|wayfinder|symbol-tokens",
-    "primaryCapabilities": ["entry-guide", "weather", "sound", "stages", "timer", "pomodoro"]
-  },
-  "firstScreen": {
-    "aspectRatio": "16:9",
-    "noVerticalCrowding": true,
-    "noCriticalCrop": true
-  },
-  "fileProtocol": {
-    "worksByDoubleClick": true,
-    "noLocalFetchForJson": true,
-    "relativeAssetsOnly": true
-  }
+  ]
 }
 ```
 
-规则：
+## Required Rules
 
-- `entryGuide` 同时承担读前介绍，不再生成独立的额外理解框架。
-- `entryGuide.steps` 数量与结构由 AI 根据书籍决定；全部文字建议 60–160 个汉字。
-- `entryGuide.durationSec` 为 15–25 秒。
-- `soundRequiredAfterStart` 必须为 `true`。
-- `stages` 必须包含 3–6 项，由 AI 主动检索目录并按章节进度聚合。
-- 每个阶段必须填写 `sourceRange` 和 `chapters`，不得使用纯情绪阶段替代目录依据。
-- `readingHint` 由预制陪伴面板直接展示，不要在场景中重复生成阶段卡或说明面板。
-- 不使用 `floatingTexts`、漂浮胶囊或标签群。若模板确需场景文字，每个阶段最多一句短暂文字，并在出现后自动退场。
-- 只有 `window` 可填写 `windowVariations`，最多三项。
-- Window 的 `windowComposition` 必须保持 `70 / 55 / 30` 构图底线。
-- `audio.isInstrumental` 必须为 `true`。
-- 全书只使用一个 `bgmFile`。
-- `weather.levels` 必须支持 `off`、`low`、`medium`。
-- `primaryCapabilities` 必须包含入静、天气、声音、阶段、计时和番茄钟。
-- `firstScreen` 与 `fileProtocol` 的布尔值必须全部为 `true`。
+- `template.primary` must be one of `window`, `vinyl`, `instrument`, `route`, `oracle`.
+- `entryGuide.soundRequiredAfterStart` must be `true`.
+- `entryGuide.steps` must not be empty.
+- Stages must be 3 to 6.
+- Every stage must have `sourceRange` and a non-empty `chapters` array.
+- Every stage must have a spoiler-safe `readingHint`.
+- Do not use `floatingTexts`; use `readingHint` inside the template control or brief stage transition text.
+- `visualDesign` is internal guidance only. Do not display its field names in the page.
+- `entryGuide.layout` and `entryGuide.motion` must be template/book-specific, not the same default for every page.
+- `entryGuide.durationSec` is only a pacing hint; every step still waits for user click.
+- Do not add `skipControl`, `showSkipButton`, or similar fields. Skip is always visible and not configurable.
 
-不要添加本 Schema 未定义的旧版机制字段或额外流程状态。
+## Stage Derivation
+
+Do not ask the user for the TOC by default. Search for it.
+If the TOC is long, group chapters by sequence and structural turns.
+If reliable chapter titles are unavailable, use conservative chapter-number ranges and say so in internal notes, not visible UI.
+
+Do not reveal late plot information in stage labels or hints.

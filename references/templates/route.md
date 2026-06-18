@@ -2,63 +2,106 @@
 
 ## Role
 
-用一条清晰、稀疏的旅途路径，让读者沿着 3–6 个目录阶段进入书籍。
+Use a route, map, road, river, rail line, or station sequence as the reader's companion.
+The reader moves, stops, marks, and rests.
 
 ## Best For
 
-旅行、迁徙、成长、流亡、寻找、公路、河流和地理结构明显的作品。
+Travel, wandering, growth, exile, searching, roads, rivers, migration, memory across places, and books whose structure feels like a path.
 
-## Avoid
+## Stable Object Skeleton
 
-路线只会成为装饰，或书籍没有明显方向、距离与停靠感时。
+Create a strong route object:
 
-## Primary Production Mode
+```text
+.vr-scene                          (full viewport, 16:9)
+  .vr-route-canvas                  (SVG or p5 route drawing area)
+    .vr-route-path                  (main path line, SVG <path> or canvas stroke)
+    .vr-route-stations              (stage stops as nodes along the path)
+    .vr-route-marker                (current position indicator)
+  .vr-route-companion               (ticket, signpost, map legend, or compass)
+  .vr-weather-layer                 (wind, rain, cloud shadow — pointer-events: none)
+  [data-vr-stage]                   (station highlight, segment glow)
+  .vr-guide (data-vr-guide)         (pre-reading guide overlay)
+```
 
-一张旅途空间图 + 前端路径。
+The route must be legible at 16:9. The path should read as a continuous line, not scattered points. Do not bury it behind generic cards.
 
-## Creative Budget
+## Production Mode
 
-- 一张具有方向感的旅途空间；
-- 3–6 个与章节范围对应的稀疏停靠阶段；
-- 路径高亮与环境变化；
-- 不像地图软件的 Wayfinder。
+Usually one generated route/travel image plus foreground DOM/SVG/p5 route graphics.
+If no image is generated, build the route with CSS/SVG/p5.
 
-## Visual Preset
+## Stage Switching
 
-生图生成公路、车窗、站台、河流、山脊、远方或旅途空间，保留路径与 UI 安全区域。
+Stages are stops, segments, bends, river reaches, stations, or checkpoints.
+Switching stages may:
 
-## BGM Preset
+- move the current marker;
+- light the next stop;
+- draw a path segment;
+- change weather, light, or surrounding texture;
+- show one short travel note, then fade it.
 
-全书一首纯音乐 BGM。站点通过天气、环境声、光线和文字表达差异。
+Do not simulate exact reading progress. Stages are atmosphere and companion cues.
 
-## Weather Preset
+## Companion Control
 
-风、雨、雾、尘、雪或热浪。天气随阶段停靠变化。
+The control must be a route object. Controls are always visible as part of the route scene — do not collapse or hide them behind a toggle:
 
-## Companion Preset
+- ticket stub;
+- signpost;
+- station board;
+- map legend;
+- compass plate;
+- small field notebook.
 
-`Wayfinder`
+Required functions:
 
-阶段可表现为横向站点条、票根、路牌或里程标记，并整合入静、天气、声音、计时和番茄钟。
+- replay guide;
+- stage/stop switcher;
+- weather strength;
+- sound;
+- timer/pomodoro as rest-stop timer.
 
-## Entry Guide Behavior
+No generic panel pasted over the route.
 
-点击开始后远方、路径和第一个停靠点逐渐显现，声音淡入，无剧透入静文字像旅途提示一样出现。
+## Weather / Atmosphere
 
-## Stage Expression
+Route weather may be:
 
-各阶段改变当前站点、路径高亮、天气、光线、环境声和短文字。切换必须直接、可预测。
+- wind across dust;
+- rain on road;
+- river ripple;
+- station light haze;
+- snow over tracks;
+- heat shimmer;
+- moving cloud shadow.
 
-## Forbidden
+Each stage should shift the sense of place or weather.
 
-- 真实地图 API；
-- 复杂寻路、分支谜题和自由驾驶；
-- 密集节点；
-- 通用等宽卡片列表；
-- 必须研究路线规则才能开始阅读。
+## Entry Guide
 
-## Acceptance
+The guide feels like starting a journey.
 
-- 路径和四个停靠点首屏可理解；
-- 切换站点不超过一步；
-- 页面始终读作旅途陪伴，不是导航软件。
+- Text appears near station, path, ticket, window edge, or roadside light.
+- First action may reveal a distant light, draw the first route line, or glow the first stop.
+- Continue clicks move the route slightly, change light, or mark a station.
+- Exit leaves a clean route with a small companion entry.
+
+## Visual Anti-Patterns
+
+UI control vocabulary for route:
+
+- Controls styled as travel objects: ticket stubs, stamps, signpost tabs, compass dial
+- Continuous values: worn dial or compass needle
+- Discrete states: stamp mark, ticket punch, signpost flip
+- Timer: field notebook counter, rest-stop clock
+
+Avoid:
+
+- a generic map with no focal path;
+- many floating labels;
+- stage cards that cover the route;
+- route text that spoils later plot;
+- dashboard-style controls.
