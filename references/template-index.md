@@ -1,36 +1,38 @@
-# V2 模板索引
+# VibeReading Template Index
 
-五个模板平等使用。选择时只问：
+> This file is a reference summary. The authoritative generation contract is `SKILL.md`.
 
-```text
-读者第一次进入这本书，最适合先看见和感受到什么？
-```
-
-| id | 读前入口 | 主生产方式 | 适合 |
-| --- | --- | --- | --- |
-| `window` | 一处可凝视的窗边空间 | 图像主导，最多 1+3 张图 | 文学、自然、地方、季节、孤独、城市观察、等待、回忆 |
-| `vinyl` | 一台播放书籍气质的唱机 | 预制前端对象 + 一张封套图 | 记忆、时间、音乐性、私人史、复古气质 |
-| `instrument` | 一台可理解的书籍主题仪器 | DOM/CSS/Canvas，条件式 Three.js | 思想、社会观察、系统、媒介、科技、哲学、非虚构 |
-| `route` | 一条清晰稀疏的旅途路径 | 一张旅途图 + 前端路径 | 旅行、迁徙、成长、流亡、寻找、公路、河流 |
-| `symbols` | 一组阅读观察象征物 | 一张象征空间图 + 3–5 个象征物 | 神话、寓言、诗性、心理、命运感、强象征文本 |
-
-所有模板共享：
-
-- 每次刷新重新出现的有声入静引导；
-- 一首纯音乐 BGM 与环境音兜底；
-- 基于目录与章节进度聚合的 3–6 个阅读阶段；
-- 天气、声音、阶段、阅读计时与番茄钟；
-- 16:9 首屏与 `file://` 支持。
-
-模板决定：
+The five templates are equal options. They are interaction prototypes, not visual skins.
+Choose by the reader's most natural first action:
 
 ```text
-主视觉角色
-创造力预算
-天气表达
-阶段的表现方式
-陪伴组件形态
-少量模板主体交互
+Does the reader look, drop the needle, tune a signal, move along a route, or draw a card?
 ```
 
-禁止混合模板。不要根据 Three.js 能力选择模板。
+| id | world verb | entry object | production mode | best for |
+| --- | --- | --- | --- | --- |
+| `window` | look / wait / tune weather | a window-side reading space | image-led, up to 1+3 images | literary fiction, nature, place, seasons, solitude, cities, waiting, memory |
+| `vinyl` | drop needle / tune / read liner notes | a record player for the book's atmosphere | built foreground object + one cover/sleeve image | memory, time, music-like prose, private history, vintage mood |
+| `instrument` | tune / scan / receive signal | a CRT Reading Receiver | DOM/CSS/SVG/p5 signal object, normally no generated image | thought, society, systems, media, technology, philosophy, nonfiction |
+| `route` | move / stop / mark / rest | a sparse travel route | one route image + foreground path system | travel, wandering, growth, exile, search, road, river |
+| `oracle` | draw / reveal / contemplate | a reading card table | HTML/CSS/p5 card table, cards, guardian card, normally no generated image | myth, allegory, poetry, psychology, fate, symbolic texts |
+
+All templates share:
+
+- sound-enabled pre-reading guide on every refresh;
+- one instrumental BGM plus ambience fallback;
+- 3 to 6 reading stages grouped from the TOC/chapter order;
+- weather, sound, stage switching, reading timer, and pomodoro;
+- high-end visual contract: visual archetype, material system, typography, nested architecture, motion choreography;
+- 16:9 desktop composition and `file://` support.
+
+Template documents decide:
+
+```text
+main object role
+creative budget
+weather expression
+stage expression
+companion control shape
+small object interactions
+```

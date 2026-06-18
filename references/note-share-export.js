@@ -18,23 +18,23 @@
   }
 
   function buildMarkdown(options) {
-    var bookTitle = options.bookTitle || "阅读边注";
+    var bookTitle = options.bookTitle || "Reading Note";
     var author = options.author || "";
     var stageLabel = options.stageLabel || "";
     var stageSubtitle = options.stageSubtitle || "";
     var note = String(options.note || "").trim();
     var createdAt = formatDate(options.createdAt);
     var lines = [
-      "# " + bookTitle + " 边注",
+      "# " + bookTitle + " Note",
       "",
-      author ? "- 作者：" + author : "",
-      stageLabel ? "- 阅读阶段：" + stageLabel : "",
-      stageSubtitle ? "- 阶段提示：" + stageSubtitle : "",
-      "- 保存时间：" + createdAt,
+      author ? "- Author: " + author : "",
+      stageLabel ? "- Reading stage: " + stageLabel : "",
+      stageSubtitle ? "- Stage hint: " + stageSubtitle : "",
+      "- Saved at: " + createdAt,
       "",
-      "## 边注",
+      "## Note",
       "",
-      note || "（空）",
+      note || "(empty)",
       ""
     ];
     return lines.filter(function (line, index) {
@@ -58,13 +58,13 @@
   function saveMarkdown(options) {
     var note = String(options.note || "").trim();
     if (!note) {
-      return { ok: false, message: "边注还是空的，先写一点再保存。" };
+      return { ok: false, message: "The note is empty. Write something before saving." };
     }
     var now = options.createdAt instanceof Date ? options.createdAt : new Date();
     var prefix = sanitizeFilename((options.filenamePrefix || options.bookTitle || "vibereading") + "-note-" + now.getTime());
     var markdown = buildMarkdown(Object.assign({}, options, { createdAt: now }));
     downloadBlob(new Blob([markdown], { type: "text/markdown;charset=utf-8" }), prefix + ".md");
-    return { ok: true, message: "边注已保存为 Markdown 文本。" };
+    return { ok: true, message: "The note was saved as Markdown." };
   }
 
   global.VibeReadingNoteShare = {

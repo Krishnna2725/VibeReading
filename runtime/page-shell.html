@@ -9,68 +9,27 @@
 </head>
 <body>
   <main data-vr-scene class="vr-scene">
-    <img class="vr-scene-image" src="./concept-image.png" alt="">
     <div data-vr-weather class="vr-weather-layer" aria-hidden="true"></div>
   </main>
 
-  <section data-vr-guide class="vr-guide" aria-label="读前入静">
+  <section data-vr-guide class="vr-guide" aria-label="Pre-reading guide">
+    <div data-vr-guide-art class="vr-guide-art" aria-hidden="true"></div>
+    <div data-vr-guide-focus class="vr-guide-focus" aria-hidden="true"></div>
     <div class="vr-guide-content">
-      <p data-vr-guide-eyebrow class="vr-guide-eyebrow">一次短暂的读前入静</p>
+      <p data-vr-guide-eyebrow class="vr-guide-eyebrow">A brief moment before reading</p>
       <h1 data-vr-book-title class="vr-guide-title">VibeReading</h1>
-      <p data-vr-guide-invitation class="vr-guide-invitation">戴上耳机，给自己十几秒钟进入这本书。</p>
+      <p data-vr-guide-invitation class="vr-guide-invitation">Put on your headphones and take a few seconds to settle into this book.</p>
       <p data-vr-guide-text></p>
       <p data-vr-guide-emphasis class="vr-guide-emphasis"></p>
       <div class="vr-guide-actions">
-        <button type="button" data-vr-guide-start class="vr-button vr-button--primary">开始</button>
+        <button type="button" data-vr-guide-start class="vr-button vr-button--primary">Begin</button>
+        <button type="button" data-vr-guide-next class="vr-button vr-button--primary" hidden>Continue</button>
       </div>
-      <button type="button" data-vr-guide-skip class="vr-guide-skip" hidden>直接进入阅读空间</button>
+      <button type="button" data-vr-guide-skip class="vr-guide-skip" hidden>Skip to reading space</button>
     </div>
   </section>
 
-  <aside class="vr-companion vr-companion--frosted-glass" aria-label="阅读陪伴控件">
-    <header class="vr-companion-header">
-      <div>
-        <span class="vr-companion-kicker">当前阅读阶段</span>
-        <strong data-vr-current-stage class="vr-companion-title">准备进入</strong>
-        <span data-vr-current-range class="vr-companion-range"></span>
-        <span data-vr-current-hint class="vr-companion-hint"></span>
-      </div>
-      <button type="button" data-vr-sound-toggle class="vr-button">暂停声音</button>
-    </header>
-    <nav data-vr-stages class="vr-stage-row" aria-label="阅读阶段"></nav>
-    <div class="vr-companion-tools">
-      <details>
-        <summary>氛围</summary>
-        <div class="vr-tool-content">
-          <span class="vr-tool-label">天气强度</span>
-          <div class="vr-control-row">
-            <button type="button" data-vr-weather-level="off" class="vr-button">关闭</button>
-            <button type="button" data-vr-weather-level="low" class="vr-button">轻</button>
-            <button type="button" data-vr-weather-level="medium" class="vr-button">明显</button>
-          </div>
-          <label class="vr-volume-label">音量
-            <input data-vr-volume class="vr-range" type="range" min="0" max="1" step="0.05" value="0.45">
-          </label>
-        </div>
-      </details>
-      <details>
-        <summary>计时</summary>
-        <div class="vr-tool-content">
-          <span data-vr-timer-display class="vr-timer">00:00</span>
-          <select data-vr-timer-mode class="vr-select" aria-label="计时模式">
-            <option value="elapsed">阅读计时</option>
-            <option value="pomodoro">25 分钟番茄钟</option>
-          </select>
-          <div class="vr-control-row">
-            <button type="button" data-vr-timer-toggle class="vr-button">开始计时</button>
-            <button type="button" data-vr-timer-reset class="vr-button">重置</button>
-          </div>
-        </div>
-      </details>
-    </div>
-    <button type="button" data-vr-guide-replay class="vr-companion-replay">重新进行入静引导</button>
-  </aside>
-
+  <script src="./runtime/libs/p5.min.js"></script>
   <script src="./app.js"></script>
   <script src="./runtime/v2-runtime.js"></script>
 </body>

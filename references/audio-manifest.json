@@ -2,132 +2,132 @@
   "bgm": [
     {
       "id": "bgm",
-      "label": "全书 BGM",
+      "label": "Book BGM",
       "file": "bgm.mp3",
-      "mood": ["定制", "纯音乐", "氛围"],
-      "note": "使用 MiniMax 根据书籍气质生成；用户点击开始后立即播放；必须携带 is_instrumental: true"
+      "mood": ["custom", "instrumental", "atmospheric"],
+      "note": "Generate with MiniMax according to the book atmosphere. Play immediately after the user clicks Start. Requests must include is_instrumental: true."
     }
   ],
   "nature": [
     {
       "id": "soft-wind",
-      "label": "微风",
+      "label": "Soft wind",
       "file": "nature/soft-wind.mp3",
-      "mood": ["平静", "户外", "微风"]
+      "mood": ["calm", "outdoor", "wind"]
     },
     {
       "id": "distant-breeze",
-      "label": "远风",
+      "label": "Distant breeze",
       "file": "nature/distant-breeze.mp3",
-      "mood": ["开阔", "干燥", "风"]
+      "mood": ["open", "dry", "wind"]
     },
     {
       "id": "birds",
-      "label": "鸟鸣",
+      "label": "Birdsong",
       "file": "nature/birds.mp3",
-      "mood": ["清晨", "自然", "鸟鸣"]
+      "mood": ["morning", "nature", "birds"]
     },
     {
       "id": "forest-wind-with-birds",
-      "label": "林间风与鸟",
+      "label": "Forest wind with birds",
       "file": "nature/forest-wind-with-birds-singing-364368.mp3",
-      "mood": ["森林", "生机", "微风"]
+      "mood": ["forest", "alive", "breeze"]
     },
     {
       "id": "night-sound-in-village-field",
-      "label": "村野夜声",
+      "label": "Village field at night",
       "file": "nature/night-sound-in-village-field.mp3",
-      "mood": ["夜晚", "乡村", "虫鸣"]
+      "mood": ["night", "rural", "insects"]
     },
     {
       "id": "lake-wavelet",
-      "label": "湖面微波",
+      "label": "Lake wavelets",
       "file": "nature/lake-wavelet.mp3",
-      "mood": ["湖水", "平静", "水声"]
+      "mood": ["lake", "calm", "water"]
     },
     {
       "id": "sea-and-seagull-wave",
-      "label": "海浪与海鸥",
+      "label": "Sea waves and seagulls",
       "file": "nature/sea-and-seagull-wave.mp3",
-      "mood": ["大海", "开阔", "海浪"]
+      "mood": ["sea", "open", "waves"]
     },
     {
       "id": "mountain-stream",
-      "label": "山溪水声",
+      "label": "Mountain stream",
       "file": "nature/the-sound-of-a-mountain-stream-_nature-sound-201930.mp3",
-      "mood": ["山溪", "流动", "水声"]
+      "mood": ["mountain", "flowing", "water"]
     },
     {
       "id": "windstorm",
-      "label": "风暴",
+      "label": "Windstorm",
       "file": "nature/Windstorm Ambience.mp3",
-      "mood": ["风暴", "强劲", "风"]
+      "mood": ["storm", "strong", "wind"]
     },
     {
       "id": "thunder-freight",
-      "label": "雷声与远处火车",
+      "label": "Thunder and distant freight train",
       "file": "nature/rolling-thunder-amp-freight-train-in-the-rain-field-recording-353729.mp3",
-      "mood": ["雷声", "雨", "远处火车"]
+      "mood": ["thunder", "rain", "distant train"]
     },
     {
       "id": "drizzle",
-      "label": "细雨",
+      "label": "Drizzle",
       "file": "nature/Drizzle.mp3",
-      "mood": ["细雨", "柔和", "雨声"]
+      "mood": ["drizzle", "soft", "rain"]
     },
     {
       "id": "moderate-rain",
-      "label": "中雨",
+      "label": "Moderate rain",
       "file": "nature/Moderate rain.mp3",
-      "mood": ["中雨", "雨声", "平静"]
+      "mood": ["rain", "steady", "calm"]
     }
   ],
   "ui": [
     {
       "id": "ui-click",
-      "label": "点击声",
+      "label": "UI click",
       "file": "ui/ui-click-43196.mp3",
-      "mood": ["交互", "点击", "UI"],
+      "mood": ["interaction", "click", "ui"],
       "type": "sfx"
     },
     {
       "id": "book-turn-page",
-      "label": "翻书声",
+      "label": "Book page turn",
       "file": "ui/book-turn-page.mp3",
-      "mood": ["阅读", "纸页", "交互"],
+      "mood": ["reading", "paper", "interaction"],
       "type": "sfx"
     }
   ],
   "indoor": [
     {
       "id": "a-small-library",
-      "label": "小图书馆",
+      "label": "Small library",
       "file": "indoor/a-small-library.mp3",
-      "mood": ["图书馆", "安静", "室内"]
+      "mood": ["library", "quiet", "indoor"]
     },
     {
       "id": "cafe-ambience",
-      "label": "咖啡馆人声",
+      "label": "Cafe ambience",
       "file": "indoor/people-talking-at-cafe-ambience-6159.mp3",
-      "mood": ["咖啡馆", "人声", "室内"]
+      "mood": ["cafe", "voices", "indoor"]
     },
     {
       "id": "fireplace-crackling",
-      "label": "壁炉噼啪",
+      "label": "Fireplace crackling",
       "file": "indoor/burning-fireplace-crackling-fire-soundswav.mp3",
-      "mood": ["壁炉", "温暖", "室内"]
+      "mood": ["fireplace", "warm", "indoor"]
     },
     {
       "id": "city-apartment",
-      "label": "城市公寓",
+      "label": "City apartment",
       "file": "indoor/city-apartment.mp3",
-      "mood": ["城市", "公寓", "背景"]
+      "mood": ["city", "apartment", "background"]
     },
     {
       "id": "rain-on-the-window",
-      "label": "窗上雨声",
+      "label": "Rain on the window",
       "file": "indoor/rain-on-the-window-114709.mp3",
-      "mood": ["窗边", "雨声", "室内"]
+      "mood": ["window", "rain", "indoor"]
     }
   ]
 }

@@ -1,28 +1,93 @@
-# V2 天气与氛围
+# p5 Weather And Atmospheric Effects
 
-每个页面必须有一种持续、克制、与书籍气质一致的天气或氛围效果。
-必须提供 `off / low / medium` 三档。
+Use p5 for weather, particles, guide art, and stage feedback when CSS alone feels flat.
+Do not use p5 to draw real HTML controls. Controls must remain accessible HTML.
 
-天气可以是：
+## Purpose
 
-- 雨、雪、雾、风、浮尘、花粉；
-- 阴影流动、暖光变化、热浪；
-- 蝴蝶、萤火或梦幻光点，但必须克制且符合书籍。
+Atmosphere is persistent spatial weather:
 
-实现要求：
+```text
+light, shadow, texture, particles, lines, depth, environmental motion
+```
 
-- 共享运行时已提供可见的雨、雪、雾、风和光尘基础天气引擎；Agent 必须让阶段天气描述能映射到其中一种，并用书籍 CSS 继续主题化；
-- 优先 CSS 或 Canvas；
-- 天气层使用 `pointer-events: none`；
-- 不遮挡主体和文字；
-- 不使用全屏重复条纹冒充雨；
-- 不使用大型 SVG 雨滴、水珠和光斑；
-- `prefers-reduced-motion` 下减少数量、速度或改为静态光影；
-- 阶段切换时天气、光线或强度应有可感知变化。
-- `off / low / medium` 三档必须肉眼可区分，不能只更新按钮状态。
+Every page must include at least one weather or atmospheric effect. Prefer stage-specific effects when possible.
 
-Window 可配合阶段图片变化。
-Instrument 的天气可进入信号与屏幕。
-Route 的天气可随站点变化。
-Symbols 的天气可改变象征物显影。
-Vinyl 的天气应落在设备、房间和唱片材质上。
+## Standard Profiles
+
+Use or adapt these profiles:
+
+| profile | visual behavior | useful for |
+| --- | --- | --- |
+| `rain` | diagonal streaks, glass beads, bottom ripples | windows, memory, night streets |
+| `fog` | soft drifting fields, depth haze, focus reveal | uncertainty, quiet books, interiors |
+| `snow` | slow particles, pale glow, muffled depth | winter, distance, silence |
+| `dust` | floating motes, warm light shafts | archives, old rooms, history |
+| `signal` | scanlines, wave noise, tuning jitter | instrument, media, systems |
+| `ripple` | expanding circles, refracted highlights | water, dreams, memory |
+| `stars` | slow drift, small parallax, dark space | myth, philosophy, cosmic distance |
+| `paper` | fibers, ash specks, ink blooms | oracle, letters, literary fragments |
+| `wind` | directional particles, cloth/leaf motion | route, travel, exposed landscapes |
+
+## Stage Adaptation
+
+Each stage should set:
+
+```text
+weather.kind
+weather.defaultLevel
+light
+ambience
+motion
+uiAccent
+```
+
+Examples:
+
+```json
+{
+  "label": "Early Rooms",
+  "weather": { "kind": "fog", "defaultLevel": "low" },
+  "light": "warm lamp glow with cooler window edges",
+  "motion": "slow condensation drift"
+}
+```
+
+The weather control changes only the current stage strength:
+
+```text
+off     no particles, keep static light/texture
+low     visible but calm
+medium  stronger motion, still readable
+```
+
+## Guide Effects
+
+The guide should use p5 or object feedback, not text-only fades.
+
+Ideas by template:
+
+- Window: rain gathers on glass, fog clears near the text, outside light blooms.
+- Vinyl: groove highlights orbit, dust follows the record, tonearm shadow moves.
+- Instrument: scanlines stabilize, noise collapses into a readable channel, indicator lights pulse.
+- Route: route line draws forward, station dots glow in staggered order, dust/wind crosses the path.
+- Oracle: card shadows gather, candle motes drift, ink or star particles converge on the selected card.
+
+## Implementation Rules
+
+- Mount p5 into `[data-vr-weather]` or a template-owned art layer.
+- Keep `pointer-events: none` on weather canvases.
+- Resize on window resize.
+- Destroy old p5 instances before creating new ones.
+- Respect `prefers-reduced-motion`: reduce particle count and speed, keep static light/focus.
+- Do not block the main thread with thousands of particles.
+- Do not hide text readability.
+
+## Visual Quality Rules
+
+- Use several particle sizes and alpha values.
+- Let particles react to stage light/accent.
+- Add depth with parallax speed differences.
+- Use slow movement; avoid arcade effects.
+- Combine particles with CSS gradients, masks, and blend modes.
+- Make low level clearly visible; otherwise the control feels broken.

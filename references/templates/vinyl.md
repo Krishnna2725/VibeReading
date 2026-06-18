@@ -88,7 +88,7 @@ The guide feels like a needle-drop ceremony.
 
 UI control vocabulary for vinyl:
 
-- Continuous values (volume, weather intensity): rotary knob with conic-gradient brass/bakelite surface, hidden range input for interaction, rotation dot indicator
+- Continuous values (volume, weather intensity): rotary knob styled according to the book-specific material system, with a visible rotation indicator; hidden range input for interaction
 - Discrete states (sound toggle, timer mode): mechanical toggle switch or small push button
 - Timer display: tape counter, sleeve stamp, or small LCD embedded in player base
 - Stage switching: groove marks, liner tabs, or label position indicators

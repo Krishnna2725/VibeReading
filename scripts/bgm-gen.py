@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""VibeReading 后台 BGM 生成器。
+"""Background BGM generator for VibeReading.
 
-Agent 只使用 start 和 status：
+Agents should only use:
+
   python scripts/bgm-gen.py start --prompt-file output/xxx/prompts/bgm.txt --output-dir output/xxx
   python scripts/bgm-gen.py status --output-dir output/xxx
 
-start 会立即返回。后台 worker 独立等待 MiniMax、下载音频并写入 bgm-meta.json。
+`start` returns immediately. A detached worker waits for MiniMax, downloads the
+audio file, and writes bgm-meta.json. Do not skip BGM because the API is slow.
 """
 
 import argparse
@@ -23,7 +25,7 @@ MODEL = "music-2.6-free"
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.write_text(json.dumps(data, ensure_ascii=True, indent=2), encoding="utf-8")
     temp.replace(path)
 
 
@@ -44,7 +46,7 @@ def pending_meta(prompt):
         "is_instrumental": True,
         "file": "./assets/audio/bgm.mp3",
         "prompt": prompt,
-        "reason": "后台生成中，请稍后运行 status 验收；不得因接口延迟改为 skipped。",
+        "reason": "Background generation is running. Check later with status. Do not change this to skipped because the API is slow.",
     }
 
 
@@ -67,13 +69,14 @@ def read_prompt(args):
 def start_job(args):
     prompt = read_prompt(args)
     if not prompt:
-        raise SystemExit("[FAIL] 需要 --prompt-file 或 --prompt")
+        raise SystemExit("[FAIL] Provide --prompt-file or --prompt")
+
     target = paths(args.output_dir)
     target["root"].mkdir(parents=True, exist_ok=True)
     target["audio"].parent.mkdir(parents=True, exist_ok=True)
 
     if target["audio"].exists() and not args.force:
-        write_json(target["meta"], final_meta("generated", prompt, "目标 BGM 已存在，未重复生成。"))
+        write_json(target["meta"], final_meta("generated", prompt, "Target BGM already exists; generation was not repeated."))
         print(f"[READY] {target['audio']}")
         return
 
@@ -94,6 +97,7 @@ def start_job(args):
         "--output-dir",
         str(target["root"]),
     ]
+
     with target["log"].open("a", encoding="utf-8") as log:
         options = {"stdin": subprocess.DEVNULL, "stdout": log, "stderr": log, "close_fds": True}
         if os.name == "nt":
@@ -108,7 +112,7 @@ def start_job(args):
         "startedAt": int(time.time()),
         "outputDir": str(target["root"]),
     })
-    print(f"[STARTED] 后台 BGM 任务 PID={process.pid}")
+    print(f"[STARTED] Background BGM job PID={process.pid}")
     print(f"[STATUS]  python scripts/bgm-gen.py status --output-dir \"{target['root']}\"")
 
 
@@ -136,18 +140,18 @@ def run_curl(api_key, prompt):
         errors="replace",
     )
     if result.returncode != 0:
-        raise RuntimeError(f"MiniMax 请求失败: {result.stderr.strip()}")
+        raise RuntimeError(f"MiniMax request failed: {result.stderr.strip()}")
     try:
         response = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise RuntimeError(f"MiniMax 返回非 JSON: {result.stdout[:300]}") from error
-    status = response.get("base_resp", {}).get("status_code", -1)
-    if status != 0:
-        message = response.get("base_resp", {}).get("status_msg", "未知错误")
-        raise RuntimeError(f"MiniMax API 错误 {status}: {message}")
+        raise RuntimeError(f"MiniMax returned non-JSON output: {result.stdout[:300]}") from error
+    status_code = response.get("base_resp", {}).get("status_code", -1)
+    if status_code != 0:
+        message = response.get("base_resp", {}).get("status_msg", "unknown error")
+        raise RuntimeError(f"MiniMax API error {status_code}: {message}")
     audio_url = response.get("data", {}).get("audio")
     if not audio_url:
-        raise RuntimeError("MiniMax 响应没有 audio URL")
+        raise RuntimeError("MiniMax response did not include an audio URL")
     return audio_url
 
 
@@ -161,9 +165,9 @@ def download(url, output):
         errors="replace",
     )
     if result.returncode != 0:
-        raise RuntimeError(f"BGM 下载失败: {result.stderr.strip()}")
+        raise RuntimeError(f"BGM download failed: {result.stderr.strip()}")
     if not output.exists() or output.stat().st_size < 1000:
-        raise RuntimeError("下载后的 BGM 文件不存在或过小")
+        raise RuntimeError("Downloaded BGM file is missing or too small")
 
 
 def worker(args):
@@ -172,7 +176,7 @@ def worker(args):
     api_key = os.environ.get("MINIMAX_API_KEY", "").strip()
     try:
         if not api_key:
-            raise RuntimeError("环境变量 MINIMAX_API_KEY 未设置")
+            raise RuntimeError("Environment variable MINIMAX_API_KEY is not set")
         audio_url = run_curl(api_key, prompt)
         download(audio_url, target["audio"])
         write_json(target["meta"], final_meta("generated", prompt))
@@ -197,12 +201,14 @@ def worker(args):
 def status(args):
     target = paths(args.output_dir)
     if not target["meta"].exists():
-        print("[MISSING] bgm-meta.json 不存在")
+        print("[MISSING] bgm-meta.json does not exist")
         raise SystemExit(2)
     meta = json.loads(target["meta"].read_text(encoding="utf-8"))
     state = meta.get("status", "missing")
-    print(json.dumps(meta, ensure_ascii=False, indent=2))
+    print(json.dumps(meta, ensure_ascii=True, indent=2))
     if state == "generated" and target["audio"].exists() and target["audio"].stat().st_size >= 1000:
+        raise SystemExit(0)
+    if state == "reused" and target["audio"].exists() and target["audio"].stat().st_size >= 1000:
         raise SystemExit(0)
     if state == "failed":
         raise SystemExit(1)
@@ -210,17 +216,17 @@ def status(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="VibeReading 后台 BGM 生成器")
+    parser = argparse.ArgumentParser(description="VibeReading background BGM generator")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    start = subparsers.add_parser("start", help="启动后台生成并立即返回")
+    start = subparsers.add_parser("start", help="start background generation and return immediately")
     start.add_argument("--prompt")
     start.add_argument("--prompt-file")
     start.add_argument("--output-dir", required=True)
     start.add_argument("--force", action="store_true")
     start.set_defaults(handler=start_job)
 
-    check = subparsers.add_parser("status", help="读取后台任务结果")
+    check = subparsers.add_parser("status", help="read the background job result")
     check.add_argument("--output-dir", required=True)
     check.set_defaults(handler=status)
 
