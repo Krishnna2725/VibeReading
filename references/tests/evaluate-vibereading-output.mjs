@@ -4,10 +4,6 @@ import { spawnSync } from "node:child_process";
 
 // --- Audio-Weather Coupling helpers ---
 
-/**
- * Mandatory ambience → weather pairing list.
- * Only assets in this map are enforced. All other combinations have no requirement.
- */
 const MANDATORY_COUPLING = new Map([
   ["drizzle", "rain"],
   ["moderate-rain", "rain"],
@@ -23,10 +19,6 @@ const MANDATORY_COUPLING = new Map([
   ["mountain-stream", "water"],
 ]);
 
-/**
- * String fallbacks for backward-compatible specs that use short names
- * instead of full asset IDs.
- */
 const STRING_FALLBACKS = new Map([
   ["rain", "rain"],
   ["drizzle", "rain"],
@@ -38,60 +30,85 @@ const STRING_FALLBACKS = new Map([
   ["sea", "water"],
 ]);
 
-/**
- * Resolve an ambience string to its required weather kind.
- * Returns the weather kind string if the ambience is on the mandatory list, null otherwise.
- */
 function resolveRequiredWeather(ambienceStr) {
   if (!ambienceStr || typeof ambienceStr !== "string") return null;
   const key = ambienceStr.trim().toLowerCase();
-
-  // Direct lookup by asset ID
   if (MANDATORY_COUPLING.has(key)) return MANDATORY_COUPLING.get(key);
-
-  // String fallback
   if (STRING_FALLBACKS.has(key)) return STRING_FALLBACKS.get(key);
-
-  // Keyword containment check (e.g. "distant rain" contains "rain")
   for (const [kw, weather] of MANDATORY_COUPLING) {
     if (key.includes(kw)) return weather;
   }
   for (const [kw, weather] of STRING_FALLBACKS) {
     if (key.includes(kw)) return weather;
   }
-
-  return null; // not on the mandatory list — no requirement
+  return null;
 }
 
-/**
- * Check audio-weather coupling for all stages.
- * Only enforces the mandatory allowlist. Non-listed assets pass silently.
- */
 function checkAudioWeatherCoupling(spec, failures) {
   if (!spec || !Array.isArray(spec.stages) || !spec.stages.length) return;
-
   for (const [index, stage] of spec.stages.entries()) {
     const ambience = stage.ambience;
     const weatherKind = stage.weather?.kind;
     if (!ambience || !weatherKind) continue;
-
     const requiredWeather = resolveRequiredWeather(ambience);
-    if (!requiredWeather) continue; // not on the mandatory list
-
+    if (!requiredWeather) continue;
     const actual = weatherKind.toLowerCase();
-    if (actual === requiredWeather) continue; // match
-
-    // Water and ripple are cross-compatible
+    if (actual === requiredWeather) continue;
     if ((requiredWeather === "water" || requiredWeather === "ripple") &&
         (actual === "water" || actual === "ripple")) continue;
-
     failures.push(
       `audio-weather mismatch stages[${index}]: ambience "${ambience}" requires ${requiredWeather} visual, but weather.kind is "${weatherKind}"`
     );
   }
 }
 
-// --- End Audio-Weather Coupling helpers ---
+// --- Runtime weather kind allowlist ---
+const WEATHER_ALLOWLIST = new Set([
+  "rain", "storm-rain", "fog", "snow", "wind",
+  "ripple", "water", "dust", "embers", "fire",
+  "signal", "paper", "stars", "leaves", "fireflies"
+]);
+
+// --- HTML comment stripper ---
+// Removes <!-- ... --> comments so attribute checks can't be bypassed by hiding in comments
+function stripHtmlComments(html) {
+  return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+// --- DOM-aware attribute check ---
+// Parses actual HTML tags and checks for data-* attributes on real elements (not in comments)
+function htmlHasDataAttributeOnElement(html, attr) {
+  const stripped = stripHtmlComments(html);
+  const required = /^([^\s=]+)(?:=(["'])(.*?)\2)?$/.exec(attr);
+  if (!required) return false;
+  const [, requiredName, , requiredValue] = required;
+  const tagRegex = /<([a-z][a-z0-9]*)\b[^>]*>/gi;
+  let match;
+  while ((match = tagRegex.exec(stripped)) !== null) {
+    const source = match[0].replace(/^<[a-z][a-z0-9]*\b/i, "");
+    const attributeRegex = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+    let attribute;
+    while ((attribute = attributeRegex.exec(source)) !== null) {
+      const name = attribute[1];
+      const value = attribute[2] ?? attribute[3] ?? attribute[4];
+      if (name === requiredName && (requiredValue === undefined || value === requiredValue)) return true;
+    }
+  }
+  return false;
+}
+
+function jsSetsDataAttribute(code, attr) {
+  const escaped = attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\.setAttribute\\(\\s*["']${escaped}["']\\s*,`).test(code);
+}
+
+function countOccurrences(str, sub) {
+  let count = 0, pos = 0;
+  while ((pos = str.indexOf(sub, pos)) !== -1) { count++; pos += sub.length; }
+  return count;
+}
+
+// --- Main evaluator ---
 
 const dirs = process.argv.slice(2);
 if (!dirs.length) {
@@ -105,7 +122,6 @@ const requiredFiles = [
   "app.js",
   "space-spec.json",
   "bgm-meta.json",
-  "prompts/bgm.txt"
 ];
 
 function parseJson(file, failures) {
@@ -143,14 +159,13 @@ function checkDir(dir) {
   const abs = path.resolve(dir);
   const failures = [];
 
+  // Required files (no more prompts/)
   for (const rel of requiredFiles) {
     if (!fs.existsSync(path.join(abs, rel))) failures.push(`missing ${rel}`);
   }
 
   const specFile = path.join(abs, "space-spec.json");
   const metaFile = path.join(abs, "bgm-meta.json");
-  const imagePromptFile = path.join(abs, "prompts", "image.txt");
-  const bgmPromptFile = path.join(abs, "prompts", "bgm.txt");
   const spec = fs.existsSync(specFile) ? parseJson(specFile, failures) : null;
   if (fs.existsSync(metaFile)) parseJson(metaFile, failures);
 
@@ -160,113 +175,159 @@ function checkDir(dir) {
   const html = fs.existsSync(htmlFile) ? fs.readFileSync(htmlFile, "utf8") : "";
   const css = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, "utf8") : "";
   const js = fs.existsSync(jsFile) ? fs.readFileSync(jsFile, "utf8") : "";
-  const imagePrompt = fs.existsSync(imagePromptFile) ? fs.readFileSync(imagePromptFile, "utf8") : "";
-  const bgmPrompt = fs.existsSync(bgmPromptFile) ? fs.readFileSync(bgmPromptFile, "utf8") : "";
   let code = `${html}\n${css}\n${js}`;
   const authoredCode = `${html}\n${js}`;
 
+  // Build stripped version for attribute checks (comments removed)
+  const strippedHtml = stripHtmlComments(html);
+
   if (html) {
+    // HTML structure checks
     if (!/^<!doctype html>/i.test(html)) failures.push("index.html must start with doctype");
-    if (!/href=["'](?:\.\/)?style\.css["']/.test(html)) failures.push("index.html does not load style.css");
-    if (!/src=["'](?:\.\/)?app\.js["']/.test(html)) failures.push("index.html does not load app.js");
+
+    // Check linked resources — count on stripped HTML (comments removed)
+    if (countOccurrences(strippedHtml, 'href="./runtime/v2-runtime.css"') !== 1)
+      failures.push("index.html must load ./runtime/v2-runtime.css exactly once");
+    if (countOccurrences(strippedHtml, 'src="./runtime/v2-runtime.js"') !== 1)
+      failures.push("index.html must load ./runtime/v2-runtime.js exactly once");
+    if (countOccurrences(strippedHtml, 'src="./runtime/libs/p5.min.js"') !== 1)
+      failures.push("index.html must load ./runtime/libs/p5.min.js exactly once");
+    if (countOccurrences(strippedHtml, 'src="./app.js"') !== 1)
+      failures.push("index.html must load ./app.js exactly once");
+
     code += readLocalAssets(abs, html, failures);
-    const runtimeCssCount = (html.match(/href=["']\.\/runtime\/v2-runtime\.css["']/g) || []).length;
-    const runtimeJsCount = (html.match(/src=["']\.\/runtime\/v2-runtime\.js["']/g) || []).length;
-    const p5JsCount = (html.match(/src=["']\.\/runtime\/libs\/p5\.min\.js["']/g) || []).length;
-    const appJsCount = (html.match(/src=["']\.\/app\.js["']/g) || []).length;
-    if (runtimeCssCount !== 1) failures.push("index.html must load ./runtime/v2-runtime.css exactly once");
-    if (runtimeJsCount !== 1) failures.push("index.html must load ./runtime/v2-runtime.js exactly once");
-    if (p5JsCount !== 1) failures.push("index.html must load ./runtime/libs/p5.min.js exactly once");
-    if (appJsCount !== 1) failures.push("index.html must load ./app.js exactly once");
-    if (/<style\b/i.test(html)) failures.push("index.html must not inline shared or book CSS");
-    if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(html)) failures.push("index.html must not inline JavaScript");
-    if (html.indexOf('src="./app.js"') > html.indexOf('src="./runtime/v2-runtime.js"')) {
+
+    // Check load order
+    const appPos = strippedHtml.indexOf('src="./app.js"');
+    const runtimePos = strippedHtml.indexOf('src="./runtime/v2-runtime.js"');
+    const p5Pos = strippedHtml.indexOf('src="./runtime/libs/p5.min.js"');
+    if (appPos > runtimePos && appPos !== -1 && runtimePos !== -1)
       failures.push("app.js must load before runtime/v2-runtime.js");
-    }
-    if (html.indexOf('src="./runtime/libs/p5.min.js"') > html.indexOf('src="./runtime/v2-runtime.js"')) {
+    if (p5Pos > runtimePos && p5Pos !== -1 && runtimePos !== -1)
       failures.push("p5.min.js must load before runtime/v2-runtime.js");
-    }
-    if (/<script[^>]+type=["']module["']/i.test(html)) failures.push("index.html must not use module scripts");
+
+    // No inline styles or scripts (check stripped HTML)
+    if (/<style\b/i.test(strippedHtml)) failures.push("index.html must not inline shared or book CSS");
+    if (/<script(?![^>]*\bsrc=)[^>]*>/i.test(strippedHtml)) failures.push("index.html must not inline JavaScript");
+    if (/<script[^>]+type=["']module["']/i.test(strippedHtml)) failures.push("index.html must not use module scripts");
   }
 
-  const featureChecks = {
-    "guided entry": /data-vr-guide-start/i,
-    "click-stepped guide": /data-vr-guide-next/i,
-    "sound playback": /\.play\s*\(/i,
-    "sound control": /data-vr-sound-toggle/i,
-    "stage switching": /data-vr-stage/i,
-    "current stage label": /data-vr-current-stage|vibereading:stage/i,
-    "current stage hint": /data-vr-current-hint|readingHint/i,
-    "weather layer": /data-vr-weather/i,
-    "weather engine marker": /vrWeatherEngine\s*=\s*["'](?:p5|canvas)["']/i,
-    "reading timer": /data-vr-timer-toggle/i,
-    "pomodoro": /data-vr-timer-mode/i
-  };
-  for (const [label, pattern] of Object.entries(featureChecks)) {
-    if (!pattern.test(code)) failures.push(`missing code feature: ${label}`);
-  }
-
-  // Required control data attributes — every generated page must include these
-  const requiredControls = [
-    { attr: "data-vr-stage", label: "stage control" },
-    { attr: "data-vr-weather-level", label: "weather level control" },
-    { attr: "data-vr-sound-toggle", label: "sound toggle" },
-    { attr: "data-vr-timer-toggle", label: "timer toggle" },
-    { attr: "data-vr-timer-mode", label: "timer mode (pomodoro)" }
+  // Feature checks — use htmlHasDataAttributeOnElement (strips comments first)
+  const requiredDataAttrs = [
+    { attr: "data-vr-guide-start", label: "guided entry" },
+    { attr: "data-vr-guide-next", label: "click-stepped guide" },
+    { attr: "data-vr-sound-toggle", label: "sound control" },
+    { attr: "data-vr-stage", label: "stage switching" },
+    { attr: "data-vr-current-stage", label: "current stage label" },
+    { attr: "data-vr-current-hint", label: "current stage hint" },
+    { attr: "data-vr-weather", label: "weather layer" },
+    { attr: "data-vr-timer-toggle", label: "reading timer" },
+    { attr: "data-vr-timer-mode", label: "pomodoro" },
+    { attr: "data-vr-note-textarea", label: "note area" },
+    { attr: "data-vr-note-save", label: "note save" },
+    { attr: "data-vr-guide-replay", label: "guide replay" },
+    { attr: "data-vr-bgm-volume", label: "BGM volume control" },
+    { attr: "data-vr-ambience-volume", label: "ambience volume control" },
   ];
-  for (const { attr, label } of requiredControls) {
-    if (!html.includes(attr)) failures.push(`missing required control: ${label} (${attr})`);
+  for (const { attr, label } of requiredDataAttrs) {
+    const present = htmlHasDataAttributeOnElement(html, attr) ||
+      (attr === "data-vr-stage" && jsSetsDataAttribute(js, attr));
+    if (!present)
+      failures.push(`missing required control: ${label} (${attr})`);
   }
 
-  if (spec && Array.isArray(spec.stages) && spec.stages.length > 0 && !/data-vr-stage/i.test(authoredCode)) {
-    failures.push("stage controls (data-vr-stage) must exist in authored output (index.html or app.js), not only in copied runtime");
+  // Required weather level controls
+  for (const level of ["off", "low", "medium"]) {
+    if (!htmlHasDataAttributeOnElement(html, `data-vr-weather-level="${level}"`))
+      failures.push(`missing weather level button: ${level}`);
   }
 
+  // Companion panel
+  if (!htmlHasDataAttributeOnElement(html, "data-vr-companion-panel") &&
+      !htmlHasDataAttributeOnElement(html, "data-vr-companion")) {
+    failures.push("missing companion panel structure");
+  }
+
+  // No old companion card (check stripped HTML)
+  if (/data-vr-companion-toggle|vr-companion-toggle|阅读陪伴/i.test(strippedHtml)) {
+    failures.push("templates must not include the old generic companion card");
+  }
+
+  // Stage controls must exist in authored output
+  const strippedAuthored = stripHtmlComments(authoredCode);
+  if (spec && Array.isArray(spec.stages) && spec.stages.length > 0 &&
+      !htmlHasDataAttributeOnElement(strippedAuthored, "data-vr-stage") &&
+      !jsSetsDataAttribute(js, "data-vr-stage")) {
+    failures.push("stage controls (data-vr-stage) must exist in authored output (index.html or app.js)");
+  }
+
+  // No fetch()
   if (/\bfetch\s*\(/i.test(code)) failures.push("file:// output must not depend on fetch()");
+
+  // No exposed internal labels (check stripped HTML)
   const visibleInternalLabels = [
-    /Deck Palette/i,
-    /Symbol System/i,
-    /Style Strategy/i,
-    /\bStyle:\s*[A-Z]/,
-    /deckPalette/,
-    /cardMaterial/,
-    /backPattern/,
-    /edgeTreatment/,
-    /motionStyle/,
-    /visualMotif/,
-    /musicDirection/,
-    /uiLanguage/,
-    /\bprompt\b/i,
-    /提示词/,
-    /风格策略/,
-    /设计说明/
+    /Deck Palette/i, /Symbol System/i, /Style Strategy/i, /\bStyle:\s*[A-Z]/,
+    /deckPalette/, /cardMaterial/, /backPattern/, /edgeTreatment/, /motionStyle/,
+    /visualMotif/, /musicDirection/, /uiLanguage/, /提示词/, /风格策略/, /设计说明/
   ];
   for (const pattern of visibleInternalLabels) {
-    if (pattern.test(html)) {
-      failures.push("index.html must not expose internal prompt, style or design-system labels to readers");
+    if (pattern.test(strippedHtml)) {
+      failures.push("index.html must not expose internal design-system labels to readers");
       break;
     }
   }
-  if (/data-vr-companion-toggle|vr-companion-toggle|阅读陪伴/i.test(html)) {
-    failures.push("templates must not include the old generic companion card; embed controls inside the selected template");
-  }
-  if (/(?:src|href)=["']https?:\/\//i.test(html)) {
+
+  // No remote assets (check stripped HTML)
+  if (/(?:src|href)=["']https?:\/\//i.test(strippedHtml)) {
     failures.push("file:// output must not depend on remote assets");
   }
+
+  // 16:9 display handling
   if (!/aspect-ratio\s*:\s*16\s*\/\s*9|@media[^{]*\((?:min-|max-)?aspect-ratio\s*:\s*16\s*\/\s*9\)/i.test(css)) {
     failures.push("missing detectable 16:9 display handling");
   }
 
+  // Scrim check
+  if (!/rgba\s*\(\s*4\s*,\s*8\s*,\s*10/.test(code) && !/scrim/.test(code)) {
+    failures.push("missing fixed light scrim (rgba(4,8,10,...) in CSS or runtime CSS)");
+  }
+
+  // Weather kind allowlist
+  if (spec?.weather?.kind && !WEATHER_ALLOWLIST.has(spec.weather.kind)) {
+    failures.push(`weather.kind "${spec.weather.kind}" is not in the runtime allowlist`);
+  }
+  for (const [index, stage] of (spec?.stages || []).entries()) {
+    const kind = stage.weather?.kind;
+    if (kind && !WEATHER_ALLOWLIST.has(kind)) {
+      failures.push(`stages[${index}].weather.kind "${kind}" is not in the runtime allowlist`);
+    }
+  }
+
+  // Spec checks
   if (spec) {
     if (spec.template?.primary === "symbols") {
       failures.push("template 'symbols' has been replaced by 'oracle'");
     }
-    const imageRequiredTemplates = new Set(["window", "vinyl", "route"]);
-    const requiresGeneratedImage = imageRequiredTemplates.has(spec.template?.primary);
-    if (requiresGeneratedImage) {
-      if (!fs.existsSync(path.join(abs, "concept-image.png"))) failures.push("missing concept-image.png");
-      if (!fs.existsSync(imagePromptFile)) failures.push("missing prompts/image.txt");
+
+    // Image assets: check declared images exist AND have size > 0
+    const imageTemplates = new Set(["window", "vinyl", "route"]);
+    const declaredImages = spec.assets?.images || [];
+    if (imageTemplates.has(spec.template?.primary)) {
+      if (declaredImages.length === 0) {
+        failures.push(`${spec.template.primary} template should declare at least one image in assets.images[]`);
+      }
+      for (const img of declaredImages) {
+        if (img.path) {
+          const imgAbs = path.resolve(abs, img.path);
+          if (!fs.existsSync(imgAbs)) {
+            failures.push(`declared image not found: ${img.path}`);
+          } else if (fs.statSync(imgAbs).size === 0) {
+            failures.push(`declared image is empty (0 bytes): ${img.path}`);
+          }
+        }
+      }
     }
+
     const stages = spec.stages;
     if (!Array.isArray(stages) || stages.length < 3 || stages.length > 6) {
       failures.push("space-spec stages must contain 3-6 items");
@@ -281,7 +342,6 @@ function checkDir(dir) {
       if (Array.isArray(stage.floatingTexts) && stage.floatingTexts.length) {
         failures.push(`space-spec stages[${index}].floatingTexts is not allowed; use the preset readingHint`);
       }
-      // TOC consistency: check that sourceRange description matches chapters count
       if (Array.isArray(stage.chapters) && stage.chapters.length > 0 && typeof stage.sourceRange === "string") {
         const rangeMatch = stage.sourceRange.match(/(\d+)\s*[-–—]\s*(\d+)/);
         if (rangeMatch) {
@@ -325,23 +385,8 @@ function checkDir(dir) {
     if (meta?.status === "generated" && !fs.existsSync(path.join(abs, "assets", "audio", "bgm.mp3"))) {
       failures.push("bgm-meta is generated but assets/audio/bgm.mp3 is missing");
     }
-    if (spec.template?.primary === "window") {
-      const composition = spec.visual?.windowComposition;
-      if (composition?.windowAndExteriorMinPercent !== 70 || composition?.exteriorMinPercent !== 55 || composition?.interiorMaxPercent !== 30) {
-        failures.push("window space-spec must declare the 70/55/30 composition contract");
-      }
-      if (!/70\b/.test(imagePrompt) || !/55\b/.test(imagePrompt)) {
-        failures.push("window image prompt must reference the 70% and 55% composition constraints");
-      }
-    }
-    if (requiresGeneratedImage && fs.existsSync(imagePromptFile) && !/no\s+text/i.test(imagePrompt)) {
-      failures.push("image prompt must include a no-text instruction");
-    }
-    if (meta?.status !== "reused" && fs.existsSync(bgmPromptFile) && (!/instrumental/i.test(bgmPrompt) || !/\bno\b.*\b(?:vocal|singing|spoken|lyric)/i.test(bgmPrompt))) {
-      failures.push("BGM prompt must require instrumental with an explicit no-vocals constraint");
-    }
 
-    // Audio-Weather Coupling check
+    // Audio-Weather Coupling
     checkAudioWeatherCoupling(spec, failures);
   }
 

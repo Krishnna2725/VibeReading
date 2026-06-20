@@ -32,6 +32,13 @@ The route must be legible at 16:9. The path should read as a continuous line, no
 Usually one generated route/travel image plus foreground DOM/SVG/p5 route graphics.
 If no image is generated, build the route with CSS/SVG/p5.
 
+### Image Rules (Route)
+
+- Prompt discipline: image prompt is for the image model only. No UI requirements, runtime instructions, or checklist text.
+- Include: `No text, no letters, no numbers, no logo, no watermark, no signage, no labels, no UI, no panels.`
+- Save the generated image under `assets/images/` and declare it in `space-spec.json` `assets.images[]`. Do not save the prompt as a deliverable file.
+- Route images should show a path, road, river, or travel landscape without any text or signage.
+
 ## Stage Switching
 
 Stages are stops, segments, bends, river reaches, stations, or checkpoints.

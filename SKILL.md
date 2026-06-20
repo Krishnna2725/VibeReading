@@ -40,6 +40,31 @@ page load -> guide homepage -> user clicks Start -> BGM starts; if it fails, amb
 
 The guide must not auto-advance. Start, Continue, Skip, and Enter Reading Space must all be user-clicked.
 
+## Template Selection
+
+Choose exactly one template by the reader's most natural first action:
+
+```text
+Does the reader look, drop the needle, tune a signal, move along a route, or draw a card?
+```
+
+| id | world verb | entry object | production mode | best for |
+| --- | --- | --- | --- | --- |
+| `window` | look / wait / tune weather | a window-side reading space | image-led, up to 1+3 images | literary fiction, nature, place, seasons, solitude, cities, waiting, memory |
+| `vinyl` | drop needle / tune / read liner notes | a record player for the book's atmosphere | built foreground object + one cover/sleeve image | memory, time, music-like prose, private history, vintage mood |
+| `instrument` | tune / scan / receive signal | a CRT Reading Receiver | DOM/CSS/SVG/p5 signal object, normally no generated image | thought, society, systems, media, technology, philosophy, nonfiction |
+| `route` | move / stop / mark / rest | a sparse travel route | one route image + foreground path system | travel, wandering, growth, exile, search, road, river |
+| `oracle` | draw / reveal / contemplate | a reading card table | HTML/CSS/p5 card table, cards, guardian card, normally no generated image | myth, allegory, poetry, psychology, fate, symbolic texts |
+
+All templates share:
+
+- sound-enabled pre-reading guide on every refresh;
+- one instrumental BGM plus ambience fallback;
+- 3 to 6 reading stages grouped from the TOC/chapter order;
+- weather, sound, stage switching, reading timer, and pomodoro;
+- high-end visual contract: visual archetype, material system, typography, nested architecture, motion choreography;
+- 16:9 desktop composition and `file://` support.
+
 ## Context Budget
 
 Read only what the current step needs.
@@ -48,9 +73,8 @@ Always read:
 
 ```text
 SKILL.md
-references/template-index.md
 references/templates/[selected-template].md
-references/space-spec-schema.md
+references/space-blueprint.md
 references/audio-manifest.json
 ```
 
@@ -59,10 +83,8 @@ Read on demand:
 ```text
 references/visual-design-contract.md   high-end visual direction
 references/entry-guide.md              pre-reading guide design
-references/image-generation.md         image prompt and asset rules
-references/music-generation.md         BGM generation workflow
-references/effects-recipes.md          p5 weather and atmospheric effects
-references/technical-contract.md       runtime state, controls, validation
+references/effects-recipes.md          p5 weather and atmospheric effects (runtime presets)
+references/technical-contract.md       desktop 16:9 hard constraints
 ```
 
 Do not read unselected templates. Do not read old templates from Git history. Do not read
@@ -72,7 +94,7 @@ Do not read unselected templates. Do not read old templates from Git history. Do
 
 1. Get the book title and optional author.
 2. Search for reliable background information and the table of contents. Do not wait for the user to provide the TOC.
-3. Choose exactly one template from `template-index.md`.
+3. Choose exactly one template from the template selection table above.
 4. Read only that template file.
 5. Define the book identity:
 
@@ -88,20 +110,19 @@ label, sourceRange, chapters, readingHint, weather, light, ambience, motion, uiA
 
 7. Read `visual-design-contract.md` and set a concrete visual system before writing UI.
 8. Read `entry-guide.md` and design the guide as a short book-specific ceremony with sound, typography, focus, p5/light/object feedback, and click-by-click pacing.
-9. Read `space-spec-schema.md` and write `space-spec.json`.
-10. Read `music-generation.md`; use `scripts/bgm-gen.py start` for new BGM generation. Do not poll the remote API manually and do not skip because it is slow.
-11. Read `image-generation.md` only when the selected template needs generated images.
-12. Select required ambience from `audio-manifest.json`.
-13. Read `technical-contract.md`.
-14. Run:
+9. Read `space-blueprint.md` and write `space-spec.json`.
+10. Use `scripts/bgm-gen.py start` for new BGM generation. Do not poll the remote API manually and do not skip because it is slow. Each book uses exactly one instrumental BGM track. Include `is_instrumental: true` and a no-vocals constraint in the prompt. Do not mark BGM as `skipped` — final states are `generated`, `reused`, or `failed`. If BGM fails, play ambience after Start. Reuse requires a non-empty `reused_from` field.
+11. Select required ambience from `audio-manifest.json`.
+12. Read `technical-contract.md`.
+13. Run scaffold:
 
 ```bash
 python scripts/scaffold-output.py --output-dir "output/<task-folder>"
 ```
 
-15. Modify only the book-specific output files unless the user explicitly asks to improve the skill itself.
-16. Copy every actually referenced local image/audio asset into the output folder. **Asset reuse only**: copy image and audio files from previous outputs if they fit the new book. Never reuse `app.js`, `style.css`, `space-spec.json`, or `index.html` from a prior generation — those contain book-specific implementation and must be written fresh each time.
-17. Run deterministic code validation.
+14. Modify only the book-specific output files unless the user explicitly asks to improve the skill itself.
+15. Copy every actually referenced local image/audio asset into the output folder. **Asset reuse only**: copy image and audio files from previous outputs if they fit the new book. Never reuse `app.js`, `style.css`, `space-spec.json`, or `index.html` from a prior generation — those contain book-specific implementation and must be written fresh each time.
+16. Run deterministic code validation.
 
 ## Output Structure
 
@@ -112,21 +133,19 @@ output/YYYY-MM-DD-BookTitle-purpose/
 ├── app.js
 ├── space-spec.json
 ├── bgm-meta.json
-├── concept-image.png          # required only for image-driven templates
-├── prompts/
-│   ├── image.txt              # required only when image generation is used
-│   └── bgm.txt
-├── stage-2.png                # optional, mainly Window
-├── stage-3.png
-├── stage-4.png
-└── assets/
-    └── audio/
-        ├── bgm.mp3
-        └── ...
+├── assets/
+│   ├── images/             # declared in space-spec.json assets.images[]
+│   │   ├── base.png        # main scene image (window/vinyl/route only)
+│   │   └── stage-2.png     # optional stage variants
+│   └── audio/
+│       ├── bgm.mp3
+│       └── ...
 ```
 
 Keep HTML, CSS, and JS separate. Copy and link the shared runtime; do not inline it and do not load it twice.
 Define page configuration in `app.js`. Do not depend on `fetch()` for local metadata.
+
+Prompt generation (image, BGM) is a **process step**, not a deliverable. Do not save prompt text files in the output. The `bgm-meta.json` tracks BGM status; image assets are declared in `space-spec.json`.
 
 ## Audio-Weather Coupling
 
@@ -167,7 +186,11 @@ Each template must embed these controls in its own visual language:
 - reading timer: pause / resume / reset;
 - 25-minute pomodoro.
 
-After the guide, each template defines its own companion visibility: some collapse to a small entry and expand on click, others embed controls directly into the device. Follow the selected template's companion control spec.
+The **Window** template uses a预制 (prebuilt) companion panel injected by the runtime:
+bottom-center, `max-width: min(74vw, 640px)`, frosted glass, four-layer structure
+(stage selector → stage info → controls row → note area).
+Other templates define their own companion visibility: some embed controls into the device,
+others use a collapsible entry point. Follow the selected template's companion control spec.
 Never generate the old generic bottom-right "Reading Companion" card.
 
 ## Template UI Language
@@ -188,6 +211,7 @@ Before writing code, make one decision for each layer:
 ```text
 Background     main visual and safe composition area
 Atmosphere     weather, particles, light, breath, texture, lines, depth
+Scrim          fixed light dark overlay (rgba(4,8,10,0.16)) for image-led templates
 Spatial Object selected template's main object
 Entry Guide    text hierarchy, focus, p5/light/object feedback
 Companion UI   template-defined companion entry and controls
@@ -218,22 +242,13 @@ Every page must be authored fresh for the current book.
 
 ## Visual Assets
 
-- `window`, `vinyl`, and `route` normally use one generated 16:9 main image.
-- `instrument` and `oracle` normally build the main object with DOM/CSS/SVG/p5 and do not call image generation.
+- `window`: 1–4 generated 16:9 scene images (1 base + up to 3 stage variants). Declare all images in `space-spec.json` under `assets.images[]`. The base image must show a complete window reading space: window plus outside view at least 70% of frame; visible outside view at least 55%; indoor furniture at most 30%.
+- `vinyl`: 1 generated image (cover/sleeve or atmospheric). Declare in `assets.images[]`.
+- `route`: 1 generated route/travel image. Declare in `assets.images[]`.
+- `instrument` and `oracle`: normally no image generation. Build with DOM/CSS/SVG/p5. Do not create placeholder image files.
 - Convert design requirements into pure visual prompts before using an image tool.
 - Generated images must contain no text, letters, numbers, logos, watermarks, signs, labels, UI, or panels.
-- `window` base image must show a complete window reading space: window plus outside view at least 70% of frame; visible outside view at least 55%; indoor furniture at most 30%.
-- Only `window` may create up to three image-to-image weather/view variants from the base image.
-
-## Sound
-
-- Generate or reuse exactly one BGM for the whole book.
-- BGM generation requests must include `is_instrumental: true`.
-- Final BGM status must be `generated`, `reused`, or `failed`, never `skipped`.
-- After user clicks Start, play BGM immediately.
-- If BGM fails, play ambience immediately.
-- Do not wait for local JSON or remote generation before deciding playback paths.
-- Copy only actually used audio assets.
+- Stage variants may change: outside view, weather, season, time of day, light. Must preserve: camera angle, geometry, room structure, book identity.
 
 ## Validation
 

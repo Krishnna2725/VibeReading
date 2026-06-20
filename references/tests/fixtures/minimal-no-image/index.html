@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VibeReading</title>
+  <title>Minimal Instrument — No Image</title>
   <link rel="stylesheet" href="./runtime/v2-runtime.css">
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -11,87 +11,50 @@
   <main data-vr-scene class="vr-scene">
     <div data-vr-weather class="vr-weather-layer" aria-hidden="true"></div>
   </main>
-
-  <!-- Window Companion Panel (阿勒泰规格 — bottom center, glass morphism) -->
   <div data-vr-companion-panel data-vr-panel-expanded="false" class="vr-companion-panel">
-    <div data-vr-panel-toggle class="vr-panel-tab" role="button" tabindex="0" aria-label="Toggle companion panel">
-      <span>controls</span>
-    </div>
-
-    <!-- Layer 1: Stage Selector -->
+    <div data-vr-panel-toggle class="vr-panel-tab" role="button" tabindex="0"><span>controls</span></div>
     <div class="vr-stage-selector" data-vr-stage-selector role="group" aria-label="Reading stages"></div>
-
-    <!-- Layer 2: Stage Info -->
     <div class="vr-stage-info">
       <h2 data-vr-current-stage class="vr-stage-info-title"></h2>
       <p data-vr-current-range class="vr-stage-info-range"></p>
       <p data-vr-current-hint class="vr-stage-info-hint"></p>
     </div>
-
-    <!-- Layer 3: Controls Row -->
     <div class="vr-controls-row">
-      <!-- Timer -->
       <span data-vr-timer-display class="vr-timer-display">00:00</span>
       <button type="button" data-vr-timer-toggle class="vr-ctrl-btn">Resume</button>
-      <button type="button" data-vr-timer-reset class="vr-ctrl-btn" aria-label="Reset timer">Reset</button>
-      <select data-vr-timer-mode class="vr-ctrl-btn" aria-label="Timer mode">
-        <option value="elapsed">Elapsed</option>
-        <option value="pomodoro">Pomodoro 25m</option>
-      </select>
-
-      <!-- Sound -->
+      <button type="button" data-vr-timer-reset class="vr-ctrl-btn">Reset</button>
+      <select data-vr-timer-mode class="vr-ctrl-btn"><option value="elapsed">Elapsed</option><option value="pomodoro">Pomodoro 25m</option></select>
       <button type="button" data-vr-sound-toggle class="vr-ctrl-btn">Mute</button>
-
-      <!-- BGM Volume -->
-      <div class="vr-volume-group">
-        <label>BGM</label>
-        <input type="range" data-vr-bgm-volume min="0" max="1" step="0.05" value="0.45" aria-label="BGM volume">
-      </div>
-
-      <!-- Ambience Volume -->
-      <div class="vr-volume-group">
-        <label>Amb</label>
-        <input type="range" data-vr-ambience-volume min="0" max="1" step="0.05" value="0.32" aria-label="Ambience volume">
-      </div>
-
-      <!-- Weather Level -->
+      <div class="vr-volume-group"><label>BGM</label><input type="range" data-vr-bgm-volume min="0" max="1" step="0.05" value="0.45"></div>
+      <div class="vr-volume-group"><label>Amb</label><input type="range" data-vr-ambience-volume min="0" max="1" step="0.05" value="0.32"></div>
       <div class="vr-weather-group" role="group" aria-label="Weather intensity">
         <button type="button" data-vr-weather-level="off" class="vr-weather-btn">Off</button>
         <button type="button" data-vr-weather-level="low" class="vr-weather-btn" aria-pressed="true">Low</button>
         <button type="button" data-vr-weather-level="medium" class="vr-weather-btn">Med</button>
       </div>
-
-      <!-- Guide Replay -->
-      <button type="button" data-vr-guide-replay class="vr-ctrl-btn" aria-label="Replay guide">Guide</button>
+      <button type="button" data-vr-guide-replay class="vr-ctrl-btn">Guide</button>
     </div>
-
-    <!-- Layer 4: Note Area -->
     <div class="vr-note-area">
-      <textarea data-vr-note-textarea placeholder="Write a reading note..." aria-label="Reading note"></textarea>
-      <div class="vr-note-actions">
-        <button type="button" data-vr-note-save class="vr-note-save">Save</button>
-      </div>
+      <textarea data-vr-note-textarea placeholder="Write a reading note..."></textarea>
+      <div class="vr-note-actions"><button type="button" data-vr-note-save class="vr-note-save">Save</button></div>
     </div>
   </div>
-
-  <!-- Pre-reading Guide Overlay -->
   <section data-vr-guide class="vr-guide" aria-label="Pre-reading guide">
     <div data-vr-guide-art class="vr-guide-art" aria-hidden="true"></div>
     <div data-vr-guide-focus class="vr-guide-focus" aria-hidden="true"></div>
     <div class="vr-guide-content">
-      <p data-vr-guide-eyebrow class="vr-guide-eyebrow">A brief moment before reading</p>
-      <h1 data-vr-book-title class="vr-guide-title">VibeReading</h1>
-      <p data-vr-guide-invitation class="vr-guide-invitation">Put on your headphones and take a few seconds to settle into this book.</p>
+      <p data-vr-guide-eyebrow class="vr-guide-eyebrow">A brief moment</p>
+      <h1 data-vr-book-title class="vr-guide-title">Test Book</h1>
+      <p data-vr-guide-invitation class="vr-guide-invitation">Settle in.</p>
       <p data-vr-guide-text></p>
       <p data-vr-guide-emphasis class="vr-guide-emphasis"></p>
       <div class="vr-guide-actions">
         <button type="button" data-vr-guide-start class="vr-button vr-button--primary">Begin</button>
         <button type="button" data-vr-guide-next class="vr-button vr-button--primary" hidden>Continue</button>
       </div>
-      <button type="button" data-vr-guide-skip class="vr-guide-skip" hidden>Skip to reading space</button>
+      <button type="button" data-vr-guide-skip class="vr-guide-skip" hidden>Skip</button>
     </div>
   </section>
-
   <script src="./runtime/libs/p5.min.js"></script>
   <script src="./app.js"></script>
   <script src="./runtime/v2-runtime.js"></script>

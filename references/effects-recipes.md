@@ -3,31 +3,54 @@
 Use p5 for weather, particles, guide art, and stage feedback when CSS alone feels flat.
 Do not use p5 to draw real HTML controls. Controls must remain accessible HTML.
 
-## Purpose
+## Runtime Effect Presets
 
-Atmosphere is persistent spatial weather:
+The runtime (`v2-runtime.js`) has built-in presets for all weather kinds below.
+Agents select weather via `weather.kind` in `space-spec.json` — **do not write custom p5 sketches**.
 
-```text
-light, shadow, texture, particles, lines, depth, environmental motion
+```js
+// In space-spec.json / app.js:
+{ "weather": { "kind": "rain", "defaultLevel": "low" } }
 ```
 
-Every page must include at least one weather or atmospheric effect. Prefer stage-specific effects when possible.
+### Preset Catalog
 
-## Standard Profiles
+| kind | visual behavior | useful for | status |
+| --- | --- | --- | --- |
+| `rain` | diagonal streaks, splash ripples, depth glow | windows, memory, night streets | implemented |
+| `storm-rain` | heavy rain, wind斜 streaks, strong splash | storms, drama, conflict | implemented |
+| `fog` | noise-drifted fields, multi-layer depth haze | uncertainty, quiet books, interiors | implemented |
+| `snow` | noise-wind drift, dual-layer glow particles | winter, distance, silence | implemented |
+| `wind` | noise-gust curved streaks, turbulence | route, travel, exposed landscapes | implemented |
+| `ripple` | expanding concentric circles, life-cycle fade | water, dreams, memory | implemented |
+| `water` | horizontal wave curves, gentle drift | rivers, lakes, calm water | implemented |
+| `dust` | floating warm motes, gentle gravity | archives, old rooms, history | implemented |
+| `embers` | rising sparks with glow halos, noise-waver | fireplace, warmth, evening | implemented |
+| `fire` | noise-flicker three-layer flame, turbulence | fireplaces, warmth, intensity | implemented |
+| `signal` | scanlines with sweep bright spot | instrument, media, systems | implemented |
+| `paper` | rotating fiber shapes, gentle drift | oracle, letters, literary fragments | implemented |
+| `stars` | twinkle with parallax depth, slow drift | myth, philosophy, cosmic distance | implemented |
+| `leaves` | polygon leaf shape, vein detail, depth parallax, noise-wind | autumn, nature, change | implemented |
+| `fireflies` | triple-glow, flocking neighbor attraction, mouse interaction | summer nights, quiet wonder | implemented |
 
-Use or adapt these profiles:
+The status column only records whether the preset ships in the runtime. Visual quality is a release-time spot check; agents do not need to generate galleries, screenshots, or extra fixture media during normal book delivery.
 
-| profile | visual behavior | useful for |
-| --- | --- | --- |
-| `rain` | diagonal streaks, glass beads, bottom ripples | windows, memory, night streets |
-| `fog` | soft drifting fields, depth haze, focus reveal | uncertainty, quiet books, interiors |
-| `snow` | slow particles, pale glow, muffled depth | winter, distance, silence |
-| `dust` | floating motes, warm light shafts | archives, old rooms, history |
-| `signal` | scanlines, wave noise, tuning jitter | instrument, media, systems |
-| `ripple` | expanding circles, refracted highlights | water, dreams, memory |
-| `stars` | slow drift, small parallax, dark space | myth, philosophy, cosmic distance |
-| `paper` | fibers, ash specks, ink blooms | oracle, letters, literary fragments |
-| `wind` | directional particles, cloth/leaf motion | route, travel, exposed landscapes |
+### Unified Entry Point
+
+The runtime exposes `renderEffect()` for programmatic effect creation:
+
+```js
+renderEffect({ layer, kind, level, accent, reducedMotion })
+```
+
+Parameters:
+- `layer`: DOM element to mount the effect canvas into
+- `kind`: weather kind string (from allowlist)
+- `level`: "off" / "low" / "medium"
+- `accent`: stage.uiAccent color
+- `reducedMotion`: boolean
+
+In practice, agents don't call this directly. They set `weather.kind` in the spec and the runtime handles rendering.
 
 ## Stage Adaptation
 
@@ -65,13 +88,23 @@ medium  stronger motion, still readable
 
 The guide should use p5 or object feedback, not text-only fades.
 
-Ideas by template:
+The runtime provides **guide motion presets** per template. Agents select via `entryGuide.motion`:
 
-- Window: rain gathers on glass, fog clears near the text, outside light blooms.
-- Vinyl: groove highlights orbit, dust follows the record, tonearm shadow moves.
-- Instrument: scanlines stabilize, noise collapses into a readable channel, indicator lights pulse.
-- Route: route line draws forward, station dots glow in staggered order, dust/wind crosses the path.
-- Oracle: card shadows gather, candle motes drift, ink or star particles converge on the selected card.
+| preset | template | behavior |
+| --- | --- | --- |
+| `window-fog-clear` | window | particles fall like condensation, window frame draws, glass clears |
+| `vinyl-groove-orbit` | vinyl | groove circles orbit, dust follows, tonearm shadow |
+| `instrument-scan-lock` | instrument | scanlines stabilize, noise collapses, indicator lights pulse |
+| `route-path-light` | route | route line draws forward, station dots glow |
+| `oracle-card-reveal` | oracle | card shadows gather, candle motes, ink/star converge |
+
+Agents select by name in `entryGuide.motion`:
+
+```json
+{ "entryGuide": { "motion": "window-fog-clear" } }
+```
+
+Do not write custom p5 guide sketches. Use the preset names.
 
 ## Audio-Weather Coupling
 

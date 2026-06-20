@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+/**
+ * Cross-platform entry point for scaffold-output.py.
+ *
+ * On Windows the ``python3`` / ``python`` commands may be Microsoft Store
+ * stubs (exit code 49) or missing entirely. This wrapper probes multiple
+ * interpreters so agents can simply run:
+ *
+ *     node scripts/scaffold-output --output-dir "output/<task>"
+ *
+ * from any platform.
+ */
+"use strict";
+
+const { spawnSync } = require("child_process");
+const path = require("path");
+
+const pyScript = path.join(__dirname, "scaffold-output.py");
+const args = process.argv.slice(2);
+
+const isWin = process.platform === "win32";
+
+// On Windows try the Python Launcher (py -3) first — it is the most
+// reliable way to find a real CPython install and avoids the Microsoft
+// Store stubs that shadow ``python`` / ``python3``.
+const interpreters = isWin
+  ? [
+      { cmd: "py", extra: ["-3"] },
+      { cmd: "python3", extra: [] },
+      { cmd: "python", extra: [] },
+    ]
+  : [
+      { cmd: "python3", extra: [] },
+      { cmd: "python", extra: [] },
+    ];
+
+for (const { cmd, extra } of interpreters) {
+  const result = spawnSync(cmd, [...extra, pyScript, ...args], {
+    stdio: "inherit",
+  });
+
+  if (result.error && result.error.code === "ENOENT") {
+    // interpreter not on PATH — try next
+    continue;
+  }
+
+  const status = result.status ?? 1;
+
+  // Windows Store stubs exit with code 49 when Python is not installed.
+  if (isWin && status === 49) {
+    // Treat as "interpreter not available" and try the next one.
+    continue;
+  }
+
+  process.exit(status);
+}
+
+console.error(
+  "Error: no working Python 3 interpreter found.\n" +
+    "Install Python 3 (https://www.python.org/downloads/) and ensure\n" +
+    "it is on your PATH, or install the Python Launcher for Windows."
+);
+process.exit(1);

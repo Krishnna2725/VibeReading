@@ -15,6 +15,12 @@ Thought, social observation, systems, media, technology, politics, philosophy, n
 
 Books whose main experience is landscape contemplation, travel, music memory, or mythic card symbolism may fit other templates better.
 
+## Image Rules (Instrument)
+
+- **Default: no image generation.** Build the CRT receiver with DOM/CSS/SVG/p5.
+- If the agent determines an image is genuinely needed, follow the standard prompt discipline: no text, no UI, no labels in the image.
+- When no image is generated, do not create placeholder image or prompt deliverable files.
+
 ## Stable Object Skeleton
 
 The receiver must include:

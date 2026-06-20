@@ -5,8 +5,11 @@ Generated pages must copy and link the shared runtime. Do not inline it after co
 Use the scaffold:
 
 ```bash
-python scripts/scaffold-output.py --output-dir "output/<task>"
+node scripts/scaffold-output --output-dir "output/<task>"
 ```
+
+Falls back to ``python scripts/scaffold-output.py`` automatically when
+``python3`` is not on PATH (common on Windows).
 
 Standard load order:
 

@@ -3,7 +3,11 @@
 
 The scaffold copies the shared runtime instead of asking agents to rebuild it.
 Book-specific work should happen in the generated app.js, style.css,
-space-spec.json, bgm-meta.json, prompts, and local assets.
+space-spec.json, bgm-meta.json, and local assets.
+
+Cross-platform note: on Windows the ``python3`` command may not exist.
+Invoke via ``python scripts/scaffold-output.py`` (or ``python3`` on
+Unix/macOS) — both work.
 """
 
 import argparse
@@ -19,6 +23,7 @@ window.VIBE_READING_SPEC = {
   entryGuide: { durationSec: 20, steps: [], soundRequiredAfterStart: true },
   audio: { bgmFile: "./assets/audio/bgm.mp3", ambienceFiles: [] },
   weather: { defaultLevel: "low" },
+  assets: { images: [] },
   stages: []
 };
 
@@ -37,17 +42,18 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 SPACE_SPEC_TEMPLATE = """{
   "book": { "title": "Untitled", "author": "" },
   "template": { "primary": "window", "reason": "" },
-  "bookDirection": {
-    "visualMotif": "",
-    "musicDirection": "",
-    "textVoice": "",
-    "motionCharacter": "",
-    "uiLanguage": "English",
-    "avoid": []
+  "layout": {
+    "aspectRatio": "16:9",
+    "scrim": "fixed-light",
+    "companionPanel": "window-bottom-center"
+  },
+  "assets": {
+    "images": []
   },
   "entryGuide": {
     "durationSec": 20,
     "soundRequiredAfterStart": true,
+    "motion": "window-fog-clear",
     "steps": []
   },
   "audio": {
@@ -68,24 +74,6 @@ BGM_META_TEMPLATE = """{
 }
 """
 
-BGM_PROMPT_TEMPLATE = """[PLACEHOLDER — replace with a book-specific BGM prompt before delivery]
-
-Write an instrumental BGM prompt for this book.
-
-Strict requirement: is_instrumental: true.
-Strictly instrumental, no vocals, no singing, no spoken words, no lyrics.
-"""
-
-IMAGE_PROMPT_TEMPLATE = """[PLACEHOLDER — replace with a book-specific image prompt before delivery]
-
-Write a descriptive image generation prompt for this book's reading space.
-
-Requirements:
-- No text, letters, words, numbers, captions, signs, labels, logos, or UI elements anywhere in the image.
-- The image should set atmosphere and mood, not illustrate plot.
-- Follow the template's composition contract from references/image-generation.md.
-"""
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -95,12 +83,12 @@ def main():
     output = Path(args.output_dir).resolve()
     runtime = output / "runtime"
     audio = output / "assets" / "audio"
-    prompts = output / "prompts"
+    images = output / "assets" / "images"
 
     runtime.mkdir(parents=True, exist_ok=True)
     (runtime / "libs").mkdir(parents=True, exist_ok=True)
     audio.mkdir(parents=True, exist_ok=True)
-    prompts.mkdir(parents=True, exist_ok=True)
+    images.mkdir(parents=True, exist_ok=True)
 
     shutil.copy2(ROOT / "runtime" / "page-shell.html", output / "index.html")
     shutil.copy2(ROOT / "runtime" / "v2-runtime.js", runtime / "v2-runtime.js")
@@ -111,8 +99,6 @@ def main():
     (output / "style.css").write_text(STYLE_TEMPLATE, encoding="utf-8")
     (output / "space-spec.json").write_text(SPACE_SPEC_TEMPLATE, encoding="utf-8")
     (output / "bgm-meta.json").write_text(BGM_META_TEMPLATE, encoding="utf-8")
-    (prompts / "bgm.txt").write_text(BGM_PROMPT_TEMPLATE, encoding="utf-8")
-    (prompts / "image.txt").write_text(IMAGE_PROMPT_TEMPLATE, encoding="utf-8")
 
     print(f"[READY] {output}")
 

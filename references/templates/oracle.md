@@ -16,6 +16,12 @@ Build the table, card backs, card faces, guardian card, spread, reveal motion, a
 
 Only generate an image if a wordless table or paper texture is genuinely needed. Card text, card structure, and controls must remain real HTML.
 
+### Image Rules (Oracle)
+
+- **Default: no image generation.** Build the card table with HTML/CSS/SVG/p5.
+- If an image is generated, follow standard prompt discipline: no text, no UI, no labels.
+- When no image is generated, do not create placeholder image or prompt deliverable files.
+
 ## Stable Object Skeleton
 
 The card table must include:
