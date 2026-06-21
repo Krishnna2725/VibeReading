@@ -662,110 +662,432 @@
        ────────────────────────────────────────────────────────── */
     const VIBE_EFFECTS = {
       rain: {
-        count: 78, color: [210, 225, 235], gravity: 7.5,
-        draw(p, particle, profile, reduceMotion) {
-          const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 120);
-          p.strokeWeight(1);
-          p.line(particle.x, particle.y, particle.x + particle.vx * 1.6, particle.y + particle.size);
-          if (particle.splash > 0) {
-            p.noFill();
-            p.stroke(r, g, b, particle.splash * 70);
-            p.ellipse(particle.x, p.height - 8, particle.splash * 32, particle.splash * 8);
-            particle.splash *= 0.78;
+        count: 160, color: [210, 225, 235], gravity: 7.5,
+        setup(p) {
+          p._rainSplashes = createParticlePool(80);
+          p._rainRipples = createParticlePool(40);
+          p._rainGustPhase = Math.random() * 1000;
+        },
+        initParticle(w, h) {
+          const r = Math.random();
+          const depth = r < 0.4 ? 0.45 : r < 0.85 ? 1.0 : 1.4;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (-0.35 - Math.random() * 0.45) * depth,
+            vy: (8 + Math.random() * 8) * depth,
+            size: depth, depth, life: Math.random() * 100,
+            len: 0, active: true
+          };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("rain", lvl);
+          /* Update splash physics */
+          const splash = p._rainSplashes;
+          if (splash) splash.forEach(function (s) {
+            s.vy += 0.12; s.x += s.vx; s.y += s.vy;
+            s.life -= dt;
+            if (s.life <= 0) splash.deactivate(s);
+          });
+          /* Update ripple lifecycle */
+          const ripples = p._rainRipples;
+          if (ripples) ripples.forEach(function (r) {
+            r.life += dt;
+            if (r.life > r.maxLife) ripples.deactivate(r);
+          });
+          /* Draw drops by depth layer */
+          for (let i = 0; i < particles.length; i++) {
+            const d = particles[i];
+            if (!d.active) continue;
+            const a = d.depth > 1.2 ? 110 : d.depth < 0.7 ? 42 : 72;
+            const w = d.depth > 1.2 ? 1.5 : 0.8;
+            p.stroke(cr, cg, cb, a);
+            p.strokeWeight(w);
+            p.line(d.x, d.y, d.x + d.vx * 1.6, d.y + d.len);
+          }
+          /* Draw splash beads */
+          p.noStroke();
+          if (splash) splash.forEach(function (s) {
+            const a = Math.min(1, s.life * 3) * 180;
+            const sz = s.size * (0.6 + (1 - s.life / s.maxLife) * 0.4) * 10;
+            p.fill(cr, cg, cb, a * 0.5);
+            p.circle(s.x, s.y, sz);
+          });
+          /* Draw elliptical ripples */
+          p.noFill();
+          p.strokeWeight(0.9);
+          if (ripples) ripples.forEach(function (r) {
+            const t = r.life / r.maxLife;
+            const e = 1 - (1 - t) * (1 - t); /* easeOut */
+            const rx = r.rx + e * 16;
+            const ry = r.ry + e * 5;
+            p.stroke(cr, cg, cb, (1 - t) * 90);
+            p.ellipse(r.x, r.y, rx * 2, ry * 2);
+          });
+          /* Surface glare for high */
+          if (profile.glare > 0 && !reduceMotion) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(220, 230, 240, 12 * profile.glare);
+            p.rect(0, p.height - 26, p.width, 26);
+            ctx.restore();
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; }
-          if (particle.y + particle.size >= p.height - 4) {
-            particle.splash = 1;
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("rain", lvl);
+          /* Gust field — low-frequency wind */
+          p._rainGustPhase = (p._rainGustPhase || 0) + 0.006;
+          const gustX = Math.sin(p._rainGustPhase) * 0.4 * profile.gust;
+          const gustY = Math.cos(p._rainGustPhase * 0.7) * 0.1;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 140, strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1
+          });
+          /* Physics */
+          particle.vx += gustX * 0.02;
+          particle.vy += 0.10 + gustY;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.len = particle.vy * (0.9 + particle.depth * 0.55);
+          /* Ground impact */
+          if (particle.y >= p.height - 10) {
+            const x = particle.x;
+            const y = p.height - 10;
+            if (Math.random() < profile.impacts) {
+              /* Spawn splash beads */
+              const splash = p._rainSplashes;
+              if (splash) {
+                const beadCount = 2 + (Math.random() < 0.5 ? 1 : 0);
+                for (let b = 0; b < beadCount; b++) {
+                  splash.spawn(function (s) {
+                    s.x = x; s.y = y;
+                    s.vx = (Math.random() - 0.5) * 1.8;
+                    s.vy = -(1.2 + Math.random() * 1.5);
+                    s.life = 0.25 + Math.random() * 0.28;
+                    s.maxLife = s.life;
+                    s.size = 1 + Math.random() * 1.3;
+                  });
+                }
+              }
+              /* Spawn elliptical ripple */
+              const ripples = p._rainRipples;
+              if (ripples) ripples.spawn(function (r) {
+                r.x = x; r.y = y;
+                r.life = 0; r.maxLife = 0.9 + Math.random() * 0.6;
+                r.rx = 6 + Math.random() * 8;
+                r.ry = r.rx * 0.28;
+              });
+            }
+            /* Respawn drop at top */
             particle.x = Math.random() * p.width;
-            particle.y = -30;
-          } else if (particle.y > p.height + particle.size || particle.x > p.width + particle.size || particle.x < -particle.size * 1.4) {
+            particle.y = -20 - Math.random() * p.height * 0.25;
+            particle.vx = (-0.35 - Math.random() * 0.45) * particle.depth;
+            particle.vy = (8 + Math.random() * 8) * particle.depth;
+          }
+          /* Off-screen respawn */
+          if (particle.y > p.height + 20 || particle.x < -40 || particle.x > p.width + 40) {
             particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
-            particle.vx = -0.8 + Math.random() * 0.9;
-            particle.vy = 7 + Math.random() * 7;
+            particle.y = -20 - Math.random() * p.height * 0.25;
           }
         },
-        initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: -0.8 + Math.random() * 0.9, vy: 7 + Math.random() * 7, size: 10 + Math.random() * 24, life: Math.random() * 100, splash: 0 };
-        }
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       "storm-rain": {
-        count: 120, color: [180, 195, 210], gravity: 9.5, windX: -2.5,
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 100);
-          p.strokeWeight(1.5);
-          p.line(particle.x, particle.y, particle.x + particle.vx * 2.2, particle.y + particle.size * 1.2);
-          if (particle.splash > 0) {
-            p.noFill();
-            p.stroke(r, g, b, particle.splash * 55);
-            p.ellipse(particle.x, p.height - 6, particle.splash * 40, particle.splash * 10);
-            particle.splash *= 0.82;
+        count: 200, color: [180, 195, 210], gravity: 9.5, windX: -2.5,
+        setup(p) {
+          p._rainSplashes = createParticlePool(100);
+          p._rainRipples = createParticlePool(50);
+          p._rainGustPhase = Math.random() * 1000;
+          p._stormPulseTime = 0;
+          p._stormPulseActive = false;
+        },
+        initParticle(w, h) {
+          const r = Math.random();
+          const depth = r < 0.35 ? 0.45 : r < 0.8 ? 1.0 : 1.5;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (-2.5 - Math.random() * 1.2) * depth,
+            vy: (9 + Math.random() * 7) * depth,
+            size: depth, depth, life: Math.random() * 100,
+            len: 0, active: true
+          };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("storm-rain", lvl);
+          /* Update splash physics */
+          const splash = p._rainSplashes;
+          if (splash) splash.forEach(function (s) {
+            s.vy += 0.14; s.x += s.vx; s.y += s.vy;
+            s.life -= dt;
+            if (s.life <= 0) splash.deactivate(s);
+          });
+          /* Update ripple lifecycle */
+          const ripples = p._rainRipples;
+          if (ripples) ripples.forEach(function (r) {
+            r.life += dt;
+            if (r.life > r.maxLife) ripples.deactivate(r);
+          });
+          /* Draw drops */
+          for (let i = 0; i < particles.length; i++) {
+            const d = particles[i];
+            if (!d.active) continue;
+            const a = d.depth > 1.2 ? 100 : d.depth < 0.7 ? 38 : 68;
+            const w = d.depth > 1.2 ? 1.8 : 0.9;
+            p.stroke(cr, cg, cb, a);
+            p.strokeWeight(w);
+            p.line(d.x, d.y, d.x + d.vx * 2.2, d.y + d.len * 1.2);
+          }
+          /* Draw splashes */
+          p.noStroke();
+          if (splash) splash.forEach(function (s) {
+            const a = Math.min(1, s.life * 3) * 160;
+            const sz = s.size * (0.6 + (1 - s.life / s.maxLife) * 0.4) * 12;
+            p.fill(cr, cg, cb, a * 0.5);
+            p.circle(s.x, s.y, sz);
+          });
+          /* Draw ripples */
+          p.noFill();
+          p.strokeWeight(1.0);
+          if (ripples) ripples.forEach(function (r) {
+            const t = r.life / r.maxLife;
+            const e = 1 - (1 - t) * (1 - t);
+            const rx = r.rx + e * 18;
+            const ry = r.ry + e * 6;
+            p.stroke(cr, cg, cb, (1 - t) * 80);
+            p.ellipse(r.x, r.y, rx * 2, ry * 2);
+          });
+          /* Ambient brightness pulse (every 8-20s, 1-3 frames) */
+          if (!reduceMotion && profile.glare > 0.3) {
+            p._stormPulseTime = (p._stormPulseTime || 0) + dt;
+            if (p._stormPulseTime > 8 + Math.random() * 12) {
+              p._stormPulseActive = true;
+              p._stormPulseTime = 0;
+              p._stormPulseFrames = 0;
+            }
+            if (p._stormPulseActive) {
+              p._stormPulseFrames = (p._stormPulseFrames || 0) + 1;
+              const pulseA = Math.max(0, 1 - p._stormPulseFrames / 3) * 15 * profile.glare;
+              const ctx = p.drawingContext;
+              ctx.save();
+              ctx.globalCompositeOperation = "screen";
+              p.noStroke();
+              p.fill(200, 210, 230, pulseA);
+              p.rect(0, 0, p.width, p.height);
+              ctx.restore();
+              if (p._stormPulseFrames > 3) p._stormPulseActive = false;
+            }
+          }
+          /* Surface glare */
+          if (profile.glare > 0) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(200, 215, 235, 15 * profile.glare);
+            p.rect(0, p.height - 30, p.width, 30);
+            ctx.restore();
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; }
-          if (particle.y + particle.size >= p.height - 4) {
-            particle.splash = 1;
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("storm-rain", lvl);
+          /* Stronger gust */
+          p._rainGustPhase = (p._rainGustPhase || 0) + 0.008;
+          const gustX = Math.sin(p._rainGustPhase) * 0.7 * profile.gust;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 140, strength: 0.5 * profile.pointerStrength, idleCutoff: 0.1
+          });
+          /* Physics */
+          particle.vx += gustX * 0.03;
+          particle.vy += 0.14;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.len = particle.vy * (0.9 + particle.depth * 0.6);
+          /* Ground impact */
+          if (particle.y >= p.height - 10) {
+            const x = particle.x;
+            const splash = p._rainSplashes;
+            const ripples = p._rainRipples;
+            if (Math.random() < profile.impacts) {
+              if (splash) {
+                const beadCount = 2 + (Math.random() < 0.6 ? 1 : 0);
+                for (let b = 0; b < beadCount; b++) {
+                  splash.spawn(function (s) {
+                    s.x = x; s.y = p.height - 10;
+                    s.vx = (Math.random() - 0.5) * 2.2;
+                    s.vy = -(1.5 + Math.random() * 1.8);
+                    s.life = 0.2 + Math.random() * 0.25;
+                    s.maxLife = s.life;
+                    s.size = 1 + Math.random() * 1.5;
+                  });
+                }
+              }
+              if (ripples) ripples.spawn(function (r) {
+                r.x = x; r.y = p.height - 10;
+                r.life = 0; r.maxLife = 0.8 + Math.random() * 0.5;
+                r.rx = 8 + Math.random() * 10;
+                r.ry = r.rx * 0.25;
+              });
+            }
+            /* Respawn */
             particle.x = Math.random() * p.width;
-            particle.y = -30;
-          } else if (particle.y > p.height + particle.size || particle.x < -particle.size * 2) {
+            particle.y = -20 - Math.random() * p.height * 0.3;
+            particle.vx = (-2.5 - Math.random() * 1.2) * particle.depth;
+            particle.vy = (9 + Math.random() * 7) * particle.depth;
+          }
+          if (particle.y > p.height + 20 || particle.x < -60) {
             particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
+            particle.y = -20 - Math.random() * p.height * 0.3;
           }
         },
-        initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: -2.5 + Math.random() * 1.2, vy: 9 + Math.random() * 7, size: 14 + Math.random() * 28, life: Math.random() * 100, splash: 0 };
-        }
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       fog: {
-        count: 16, color: [210, 222, 222], gravity: 0.18, drift: 0.55, mist: true,
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          const alpha = 6 + Math.sin(particle.life * 0.01 + particle.seed) * 3;
-          p.noStroke();
-          // Multi-layer fog for depth
-          for (let layer = 3; layer > 0; layer--) {
-            p.fill(r, g, b, alpha * (layer / 3));
-            p.circle(particle.x, particle.y, particle.size * (layer * 0.6));
+        count: 8, color: [210, 222, 222], gravity: 0.18, drift: 0.55, mist: true,
+        setup(p) {
+          /* Create low-res fog buffer */
+          const bw = Math.round(p.width * 0.3);
+          const bh = Math.round(p.height * 0.3);
+          p._fogBuffer = p.createGraphics(bw, bh);
+          p._fogClumps = [];
+          const numClumps = 8;
+          for (let i = 0; i < numClumps; i++) {
+            p._fogClumps.push({
+              x: Math.random(), y: Math.random(),
+              vx: (Math.random() - 0.5) * 0.0015,
+              vy: (Math.random() - 0.5) * 0.0008,
+              rx: 0.22 + Math.random() * 0.18,
+              ry: 0.12 + Math.random() * 0.14,
+              phase: Math.random() * Math.PI * 2,
+              layer: i < numClumps / 2 ? 0 : 1 /* 0=far, 1=near */
+            });
           }
-        },
-        tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based drift
-            const driftX = p.noise(particle.life * 0.003, particle.seed) * 1.5 - 0.75;
-            const driftY = p.noise(particle.seed + 400, particle.life * 0.002) * 0.4 - 0.2;
-            particle.x += driftX;
-            particle.y += driftY;
-            particle.life += 1;
-          }
-          if (particle.x > p.width + particle.size || particle.x < -particle.size) {
-            particle.x = -p.width * 0.2 + Math.random() * p.width * 0.3;
-            particle.y = Math.random() * p.height;
-          }
+          p._fogRecovery = 0;
         },
         initParticle(w, h) {
-          return { x: -w * 0.2 + Math.random() * w * 1.4, y: Math.random() * h, vx: 0.12, vy: 0, size: 80 + Math.random() * 220, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
-        }
+          /* Particles not used for fog — drawAll manages clumps */
+          return { x: 0, y: 0, vx: 0, vy: 0, size: 1, life: 0, active: false };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("fog", lvl);
+          const pg = p._fogBuffer;
+          if (!pg) return;
+          const ctx = pg.drawingContext;
+          const clumps = p._fogClumps;
+          if (!clumps) return;
+          /* Update clumps */
+          const speed = profile.speed;
+          const parallax = profile.parallax;
+          for (let i = 0; i < clumps.length; i++) {
+            const c = clumps[i];
+            c.x += c.vx * speed;
+            c.y += c.vy * speed;
+            c.phase += dt * 0.12;
+            if (c.x < -0.25) c.x = 1.25;
+            if (c.x > 1.25) c.x = -0.25;
+            if (c.y < -0.25) c.y = 1.25;
+            if (c.y > 1.25) c.y = -0.25;
+          }
+          /* Draw to low-res buffer */
+          pg.clear();
+          for (let i = 0; i < clumps.length; i++) {
+            const c = clumps[i];
+            const depthScale = c.layer === 0 ? 0.7 * parallax : 1.0;
+            const x = c.x * pg.width;
+            const y = c.y * pg.height;
+            const w = pg.width * c.rx * depthScale * (1 + Math.sin(c.phase) * 0.08);
+            const h = pg.height * c.ry * depthScale * (1 + Math.cos(c.phase * 0.8) * 0.08);
+            const alpha = (0.25 + c.layer * 0.1) * profile.coverage;
+            /* Draw elliptical gradient clump using cached sprite */
+            const cache = p._cache;
+            if (cache) {
+              const sprite = cache.radial({
+                radius: 80, color: [cr, cg, cb], alpha: alpha,
+                midAlpha: 0.08, midStop: 0.4, outerAlpha: 0, shape: "e"
+              });
+              ctx.save();
+              ctx.globalCompositeOperation = "source-over";
+              pg.image(sprite, x - w * 0.5, y - h * 0.5, w, h);
+              ctx.restore();
+            } else {
+              pg.noStroke();
+              pg.fill(cr, cg, cb, alpha * 255);
+              pg.ellipse(x, y, w, h);
+            }
+          }
+          /* Pointer dissolution */
+          const pointer = p._pointer;
+          const ps = pointer && pointer.state;
+          if (ps && ps.active && ps.x != null && ps.y != null && profile.erase > 0) {
+            const px = ps.x / p.width * pg.width;
+            const py = ps.y / p.height * pg.height;
+            const eraseRadius = 40 + Math.min(ps.speed * 0.02, 30);
+            ctx.save();
+            ctx.globalCompositeOperation = "destination-out";
+            const g = ctx.createRadialGradient(px, py, 0, px, py, eraseRadius);
+            g.addColorStop(0, "rgba(0,0,0," + (0.08 * profile.erase) + ")");
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(px, py, eraseRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            p._fogRecovery = 1;
+          } else if (p._fogRecovery > 0) {
+            /* Smooth recovery: slowly redraw clumps */
+            p._fogRecovery = Math.max(0, p._fogRecovery - dt * 0.4);
+          }
+          /* Upsample to main canvas with image smoothing */
+          const mainCtx = p.drawingContext;
+          mainCtx.save();
+          mainCtx.imageSmoothingEnabled = true;
+          mainCtx.globalCompositeOperation = (kind === "fog") ? "screen" : "source-over";
+          p.image(pg, 0, 0, p.width, p.height);
+          mainCtx.restore();
+        },
+        tick(particle, p, reduceMotion) { /* drawAll handles all updates */ },
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       snow: {
-        count: 56, color: [245, 246, 238], gravity: 1.2, drift: 0.9,
+        count: 180, color: [245, 246, 238], gravity: 1.2, drift: 0.9,
+        initParticle(w, h) {
+          const r = Math.random();
+          const depth = r < 0.45 ? 0.55 : r < 0.85 ? 1.0 : 1.45;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (Math.random() - 0.5) * 0.3 * depth,
+            vy: (0.5 + Math.random() * 0.9) * depth,
+            ax: 0, ay: 0,
+            size: (depth < 0.7 ? 1.2 : depth > 1.2 ? 4.0 : 2.2) * (0.7 + Math.random() * 0.6),
+            depth, life: Math.random() * 100,
+            seed: Math.random() * 9999
+          };
+        },
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          const alpha = 80 + Math.sin(particle.life * 0.02 + particle.seed) * 35;
+          const alpha = particle.depth > 1.2 ? 190 : particle.depth < 0.7 ? 55 : 110;
           const cache = p._cache;
           if (cache) {
             const sprite = cache.radial({
               radius: 18, color: [r, g, b], alpha: 1,
               midAlpha: 0.18, midStop: 0.45, outerAlpha: 0
             });
-            cache.draw(sprite, particle.x, particle.y, particle.size * 6, particle.size * 6, "source-over", alpha);
+            const sz = particle.size * 6;
+            cache.draw(sprite, particle.x, particle.y, sz, sz, "source-over", alpha);
           } else {
             p.noStroke();
             p.fill(r, g, b, alpha * 0.3);
@@ -775,22 +1097,49 @@
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based wind drift instead of simple random
-            const windX = p.noise(particle.life * 0.006, particle.seed) * 2 - 1;
-            const windY = p.noise(particle.seed + 200, particle.life * 0.004) * 0.5;
-            particle.x += particle.vx + windX * 0.8;
-            particle.y += particle.vy + windY;
-            particle.life += 1;
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("snow", lvl);
+          /* Flow field — noise-based wind */
+          const t = performance.now() * 0.0002 + particle.life * 0.01;
+          const flowX = Math.sin(t + particle.seed) * 0.03 * profile.flowAmp;
+          const flowY = Math.cos(t * 0.8 + particle.seed) * 0.01;
+          particle.ax = flowX;
+          particle.ay = 0.003 + flowY;
+          /* Pointer attract with smooth falloff */
+          applyPointerField(particle, p._pointer, {
+            mode: "attract", radius: 140,
+            strength: 0.03 * profile.pointer, idleCutoff: 0.06
+          });
+          /* Edge swirl near pointer center */
+          applyPointerField(particle, p._pointer, {
+            mode: "orbit", radius: 70,
+            strength: 0.012 * profile.swirl, idleCutoff: 0.06
+          });
+          /* Apply acceleration to velocity */
+          particle.vx += particle.ax;
+          particle.vy += particle.ay;
+          /* Damping + speed clamp */
+          particle.vx *= 0.992;
+          particle.vy *= 0.998;
+          const maxSpeed = 0.9 + particle.depth * 1.3;
+          const speed = Math.hypot(particle.vx, particle.vy);
+          if (speed > maxSpeed) {
+            particle.vx = particle.vx / speed * maxSpeed;
+            particle.vy = particle.vy / speed * maxSpeed;
           }
-          if (particle.y > p.height + particle.size) {
+          /* Integrate position */
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.life += 0.5;
+          /* Respawn off-screen */
+          if (particle.y > p.height + 20 || particle.x < -40 || particle.x > p.width + 40) {
             particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
+            particle.y = -10 - Math.random() * p.height * 0.3;
+            particle.vx = (Math.random() - 0.5) * 0.3 * particle.depth;
+            particle.vy = (0.5 + Math.random() * 0.9) * particle.depth;
           }
         },
-        initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.6, vy: 1.2 * (0.3 + Math.random() * 0.7), size: 1 + Math.random() * 3, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
-        }
       },
 
       wind: {
@@ -1450,6 +1799,7 @@
           const spawnScale = reduceMotion ? (lvl === "off" ? 0 : 0.18) : profile.spawnScale;
           const count = Math.ceil(effect.count * spawnScale);
           particles = Array.from({ length: count }, () => effect.initParticle(p.width, p.height));
+          if (effect.setup) effect.setup(p, kind);
         }
 
         p.setup = () => {
@@ -1477,11 +1827,16 @@
           p._particles = particles;
           p.clear();
           p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
-          for (const particle of particles) {
-            effect.draw(p, particle, effect, reduceMotion);
-            if (!reduceMotion) {
-              effect.tick(particle, p, reduceMotion);
-              particle.life += 1;
+          if (effect.drawAll) {
+            /* Bulk rendering mode (fog, rain with impacts, etc.) */
+            effect.drawAll(p, particles, effect, reduceMotion, clock.dt);
+          } else {
+            for (const particle of particles) {
+              effect.draw(p, particle, effect, reduceMotion);
+              if (!reduceMotion) {
+                effect.tick(particle, p, reduceMotion);
+                particle.life += 1;
+              }
             }
           }
           /* Mouse glow using gradient sprite instead of concentric circles */
