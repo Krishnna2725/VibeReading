@@ -35,6 +35,13 @@ The record, tonearm, and sleeve must feel like physical objects with material. D
 Use DOM/CSS/SVG/p5 for the player and motion.
 Optionally generate one cover/sleeve or background image if it improves the book identity.
 
+### Image Rules (Vinyl)
+
+- Prompt discipline: image prompt is for the image model only. No UI requirements, runtime instructions, or checklist text.
+- Include: `No text, no letters, no numbers, no logo, no watermark, no signage, no labels, no UI, no panels.`
+- Output files: `concept-image.png`, `prompts/image.txt` (only if generating image).
+- Vinyl image is optional — if no image is generated, the record player scene is built entirely with DOM/CSS/SVG/p5.
+
 ## Stage Switching
 
 Stage switching does not change BGM.

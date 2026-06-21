@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Window Multi-Image — Test</title>
+  <link rel="stylesheet" href="./runtime/v2-runtime.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main data-vr-scene class="vr-scene">
+    <div data-vr-weather class="vr-weather-layer" aria-hidden="true"></div>
+  </main>
+  <div data-vr-companion-panel data-vr-panel-expanded="false" class="vr-companion-panel">
+    <div data-vr-panel-toggle class="vr-panel-tab" role="button" tabindex="0"><span>controls</span></div>
+    <div class="vr-stage-selector" data-vr-stage-selector role="group" aria-label="Reading stages"></div>
+    <div class="vr-stage-info">
+      <h2 data-vr-current-stage class="vr-stage-info-title"></h2>
+      <p data-vr-current-range class="vr-stage-info-range"></p>
+      <p data-vr-current-hint class="vr-stage-info-hint"></p>
+    </div>
+    <div class="vr-controls-row">
+      <span data-vr-timer-display class="vr-timer-display">00:00</span>
+      <button type="button" data-vr-timer-toggle class="vr-ctrl-btn">继续</button>
+      <button type="button" data-vr-timer-reset class="vr-ctrl-btn">重置</button>
+      <select data-vr-timer-mode class="vr-ctrl-btn"><option value="elapsed">Elapsed</option><option value="pomodoro">Pomodoro 25m</option></select>
+      <button type="button" data-vr-sound-toggle class="vr-ctrl-btn">静音</button>
+      <div class="vr-volume-group"><label>BGM</label><input type="range" data-vr-bgm-volume min="0" max="1" step="0.05" value="0.45"></div>
+      <div class="vr-volume-group"><label>Amb</label><input type="range" data-vr-ambience-volume min="0" max="1" step="0.05" value="0.32"></div>
+      <div class="vr-weather-group" role="group" aria-label="Weather intensity">
+        <button type="button" data-vr-weather-level="off" class="vr-weather-btn">Off</button>
+        <button type="button" data-vr-weather-level="low" class="vr-weather-btn" aria-pressed="true">Low</button>
+        <button type="button" data-vr-weather-level="medium" class="vr-weather-btn">Med</button>
+      </div>
+      <button type="button" data-vr-guide-replay class="vr-ctrl-btn">Guide</button>
+    </div>
+    <div class="vr-note-area">
+      <textarea data-vr-note-textarea placeholder="写下此刻的边注..."></textarea>
+      <div class="vr-note-actions"><button type="button" data-vr-note-save class="vr-note-save">Save</button></div>
+    </div>
+  </div>
+  <section data-vr-guide class="vr-guide" aria-label="Pre-reading guide">
+    <div data-vr-guide-art class="vr-guide-art" aria-hidden="true"></div>
+    <div data-vr-guide-focus class="vr-guide-focus" aria-hidden="true"></div>
+    <div class="vr-guide-content">
+      <p data-vr-guide-eyebrow class="vr-guide-eyebrow">A brief moment</p>
+      <h1 data-vr-book-title class="vr-guide-title">Window Test</h1>
+      <p data-vr-guide-invitation class="vr-guide-invitation">Settle in.</p>
+      <p data-vr-guide-text></p>
+      <p data-vr-guide-emphasis class="vr-guide-emphasis"></p>
+      <div class="vr-guide-actions">
+        <button type="button" data-vr-guide-start class="vr-button vr-button--primary">开始</button>
+        <button type="button" data-vr-guide-next class="vr-button vr-button--primary" hidden>继续</button>
+      </div>
+      <button type="button" data-vr-guide-skip class="vr-guide-skip" hidden>Skip</button>
+    </div>
+  </section>
+  <script src="./runtime/libs/p5.min.js"></script>
+  <script src="./app.js"></script>
+  <script src="./runtime/v2-runtime.js"></script>
+</body>
+</html>

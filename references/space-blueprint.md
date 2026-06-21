@@ -1,8 +1,9 @@
-# Space Spec Schema
+# Space Blueprint
 
 Write `space-spec.json` as the implementation source of truth. Keep it spoiler-safe and concise.
+This is an **engineering blueprint**, not a literary description. It must directly guide code generation.
 
-Recommended shape:
+## Schema
 
 ```json
 {
@@ -14,48 +15,20 @@ Recommended shape:
     "primary": "window",
     "reason": ""
   },
-  "bookDirection": {
-    "visualMotif": "",
-    "musicDirection": "",
-    "textVoice": "",
-    "motionCharacter": "",
-    "uiLanguage": "",
-    "avoid": []
+  "layout": {
+    "aspectRatio": "16:9",
+    "scrim": "fixed-light",
+    "companionPanel": "window-bottom-center"
   },
-  "visualDesign": {
-    "archetype": "",
-    "materialSystem": "",
-    "typography": "",
-    "palette": [],
-    "nestedArchitecture": "",
-    "motionChoreography": ""
-  },
-  "entryGuide": {
-    "durationSec": 20,
-    "soundRequiredAfterStart": true,
-    "layout": "",
-    "motion": "",
-    "steps": [
-      {
-        "id": "",
-        "eyebrow": "",
-        "text": "",
-        "emphasis": "",
-        "visual": "",
-        "focusWords": ["关键词1", "关键词2"],
-        "entryRegion": "sleeve-left | center | screen-right",
-        "objectCue": "tonearm-hover | needle-drop | power-on"
-      }
-    ]
-  },
-  "audio": {
-    "bgmFile": "./assets/audio/bgm.mp3",
-    "ambienceFiles": [],
-    "bgmPrompt": "",
-    "isInstrumental": true
-  },
-  "weather": {
-    "defaultLevel": "low"
+  "assets": {
+    "images": [
+      { "role": "base", "path": "./assets/images/base.png", "template": "window" }
+    ],
+    "audio": {
+      "bgmFile": "./assets/audio/bgm.mp3",
+      "ambienceFiles": [],
+      "isInstrumental": true
+    }
   },
   "stages": [
     {
@@ -73,7 +46,38 @@ Recommended shape:
       "motion": "",
       "uiAccent": ""
     }
-  ]
+  ],
+  "companion": {
+    "type": "panel",
+    "controls": ["stage", "timer", "pomodoro", "sound", "bgm-volume", "ambience-volume", "weather", "guide-replay", "notes"]
+  },
+  "effects": {
+    "weatherKinds": ["rain", "fog", "snow"],
+    "guideMotion": "window-fog-clear"
+  },
+  "entryGuide": {
+    "durationSec": 20,
+    "soundRequiredAfterStart": true,
+    "motion": "window-fog-clear",
+    "steps": [
+      {
+        "id": "",
+        "eyebrow": "",
+        "text": "",
+        "emphasis": "",
+        "visual": "",
+        "focusWords": [],
+        "entryRegion": "sleeve-left | center | screen-right",
+        "objectCue": "tonearm-hover | needle-drop | power-on"
+      }
+    ]
+  },
+  "validation": {
+    "minStages": 3,
+    "maxStages": 6,
+    "requiresImage": true,
+    "templateContract": "window"
+  }
 }
 ```
 
@@ -85,9 +89,9 @@ Recommended shape:
 - Stages must be 3 to 6.
 - Every stage must have `sourceRange` and a non-empty `chapters` array.
 - Every stage must have a spoiler-safe `readingHint`.
+- `weather.kind` must be one of the runtime allowlist: `rain`, `storm-rain`, `fog`, `snow`, `wind`, `ripple`, `water`, `dust`, `embers`, `fire`, `signal`, `paper`, `stars`.
 - Do not use `floatingTexts`; use `readingHint` inside the template control or brief stage transition text.
-- `visualDesign` is internal guidance only. Do not display its field names in the page.
-- `entryGuide.layout` and `entryGuide.motion` must be template/book-specific, not the same default for every page.
+- `entryGuide.motion` must be a template preset or a template-specific value.
 - `entryGuide.durationSec` is only a pacing hint; every step still waits for user click.
 - Do not add `skipControl`, `showSkipButton`, or similar fields. Skip is always visible and not configurable.
 
@@ -109,3 +113,13 @@ If the TOC is long, group chapters by sequence and structural turns.
 If reliable chapter titles are unavailable, use conservative chapter-number ranges and say so in internal notes, not visible UI.
 
 Do not reveal late plot information in stage labels or hints.
+
+## What This Blueprint Is NOT
+
+This blueprint is NOT a place for:
+- Literary atmosphere descriptions ("the book breathes with a quiet longing")
+- World-building prose ("a vast desert of silence stretches...")
+- Design strategy explanations
+- Visual motif descriptions
+
+Those belong in `bookDirection` or internal agent reasoning. The blueprint is purely engineering: what components, what states, what assets, what contracts.

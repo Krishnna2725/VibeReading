@@ -9,22 +9,6 @@ The book is expressed through outside view, glass, weather, light, and a few sho
 
 Literary fiction, nature, place, seasons, solitude, urban observation, waiting, memory, and books with strong atmosphere.
 
-## Stable Object Skeleton
-
-The image is the main visual, but the template still needs a surrounding DOM structure:
-
-```text
-.vr-scene                          (full viewport, 16:9)
-  img.vr-scene-image               (base image or current stage variant)
-  .vr-weather-layer                 (p5 or canvas weather overlay, pointer-events: none)
-  .vr-window-frame                  (CSS border/shadow framing the glass edge)
-  [data-vr-stage]                   (stage indicator strip or glass-edge marks)
-  [data-vr-companion]               (companion entry: condensation mark, latch, paper slip)
-  .vr-guide (data-vr-guide)         (pre-reading guide overlay)
-```
-
-The frame, stage indicator, and companion entry sit on top of the image but must not dominate it. Weather renders behind the frame but in front of (or blended with) the image.
-
 ## Production Mode
 
 Image-led.
@@ -44,9 +28,9 @@ No text, no letters, no numbers, no logo, no watermark, no signage, no labels, n
 
 The generated image may include interior context, but the window and outside world must dominate.
 
-## Stage Switching
+### Variants
 
-Window may create one base image plus up to three image-to-image variants.
+Only `window` may generate up to three variants from the base image.
 Variants may change:
 
 ```text
@@ -61,17 +45,88 @@ camera angle, window geometry, room structure, book identity
 
 If only one image is available, use p5 weather, light overlays, glass texture, and color grading for stage changes.
 
-## Companion Control
+### Prompt Discipline
 
-After the guide, show only the small companion entry (condensation mark, latch, paper slip, glass-edge tab) by default. Expand the full control panel only after user click. The expanded control may sit along the frame or sill, but must not cover the window view.
+The image prompt is for the image model only. Do not paste UI requirements, runtime instructions, checklist text, or implementation notes into it. Convert requirements into pure visual language:
 
-Required functions:
+```text
+subject, composition, lighting, material, camera, mood, color, texture, negative constraints
+```
 
-- replay guide;
-- stage switching;
-- weather strength for current stage;
-- sound;
-- reading timer and pomodoro.
+Always include the exact no-text constraint. Never generate text embedded in images, UI controls inside images, posters, title cards, signs, labels, book covers with readable text, over-detailed furniture, or faces unless explicitly necessary and spoiler-safe.
+
+### Output Files
+
+When image generation is used, write:
+
+```text
+concept-image.png
+prompts/image.txt
+stage-2.png       optional
+stage-3.png       optional
+stage-4.png       optional
+```
+
+## Window Companion Panel (阿勒泰规格)
+
+The Window template uses a **预制 companion panel** injected by the runtime. This is the fixed engineering contract — agents do not design the panel, they use it.
+
+### Panel Contract
+
+```text
+position:         fixed, bottom center
+max-width:        min(74vw, 640px)
+border-radius:    20px 20px 0 0
+background:       rgba(18, 20, 20, 0.74) with backdrop-filter: blur(16px)
+border:           1px solid rgba(255,255,255,0.1), bottom none
+z-index:          50
+```
+
+### Panel Structure (Four Layers)
+
+```text
+Layer 1: Stage Selector
+  - horizontal scroll row of stage pills
+  - data-vr-stage attributes for runtime binding
+  - aria-pressed state for current stage
+
+Layer 2: Stage Info
+  - data-vr-current-stage  (title, accent color)
+  - data-vr-current-range  (chapter range)
+  - data-vr-current-hint   (reading hint)
+
+Layer 3: Controls Row
+  - data-vr-timer-display  (MM:SS)
+  - data-vr-timer-toggle   (pause/resume)
+  - data-vr-timer-reset
+  - data-vr-timer-mode     (elapsed/pomodoro select)
+  - data-vr-sound-toggle   (mute/unmute)
+  - data-vr-bgm-volume     (range slider)
+  - data-vr-ambience-volume (range slider)
+  - data-vr-weather-level  (off/low/medium buttons)
+  - data-vr-guide-replay
+
+Layer 4: Note Area
+  - data-vr-note-textarea  (reading note input)
+  - data-vr-note-save      (save as markdown)
+```
+
+### Panel Behavior
+
+- After guide completes, the panel fades in at bottom center.
+- The panel toggle tab collapses/expands the panel content.
+- The panel is always visible in reading mode (data-vr-mode="reading").
+- Frosted glass style may be recolored via --book-accent for book theming.
+- The panel does NOT cover the window view — it sits at the bottom edge.
+
+### Why This Panel Exists
+
+Previously, the Window companion was a right-bottom 220px card that agents had to design from scratch each time. This led to inconsistent, fragile outputs. The预制 panel eliminates that variance: every Window page gets the same solid panel, and the agent only writes book-specific stage data and visual styling around it.
+
+## Stage Switching
+
+Window may create one base image plus up to three image-to-image variants.
+Use p5 weather, light overlays, and color grading for stage changes when only one image is available.
 
 ## Weather / Atmosphere
 
@@ -85,6 +140,9 @@ Stage examples:
 
 Low and medium levels must both be visible.
 
+The runtime provides these weather presets (see `effects-recipes.md` for full spec):
+`rain`, `storm-rain`, `fog`, `snow`, `wind`, `ripple`, `water`, `dust`, `embers`, `fire`, `signal`, `paper`, `stars`.
+
 ## Entry Guide
 
 The guide feels like slowly seeing through glass.
@@ -93,6 +151,8 @@ The guide feels like slowly seeing through glass.
 - Focus mask points to the outside view or glass surface.
 - Object feedback may be fog clearing, rain appearing, latch glow, or window light changing.
 - Skip is secondary, not an invitation to avoid the ceremony.
+
+Guide motion preset: `window-fog-clear` (particles fall like condensation, window frame draws, glass clears).
 
 ## Visual Anti-Patterns
 
@@ -109,4 +169,5 @@ Avoid:
 - centered subtitle-only guide;
 - companion card floating far from the window;
 - stage chips covering the view;
-- image prompts that include UI instructions or text.
+- image prompts that include UI instructions or text;
+- right-bottom 220px small card (use the预制 panel instead).

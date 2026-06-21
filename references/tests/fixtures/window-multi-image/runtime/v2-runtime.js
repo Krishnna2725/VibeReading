@@ -510,39 +510,26 @@
       },
 
       leaves: {
-        count: 28, color: [180, 140, 60], gravity: 0.6, drift: 1.2,
+        count: 24, color: [180, 140, 60], gravity: 0.6, drift: 1.2,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          const alpha = (0.4 + Math.sin(particle.life * 0.03) * 0.15) * (particle.depth || 1);
-          const sz = particle.size * (0.7 + (particle.depth || 0.5) * 0.6);
+          const alpha = 0.5 + Math.sin(particle.life * 0.03) * 0.2;
           p.noStroke();
           p.push();
           p.translate(particle.x, particle.y);
           p.rotate(particle.rotation || 0);
-          // Leaf shape — pointed ellipse with notch
-          p.fill(r, g, b, alpha * 200);
-          p.beginShape();
-          p.vertex(0, -sz * 2.5);          // tip
-          p.bezierVertex(sz * 1.2, -sz * 1.5, sz * 1.5, -sz * 0.3, sz * 0.8, sz * 0.8);
-          p.vertex(sz * 0.15, sz * 1.8);   // notch
-          p.vertex(-sz * 0.15, sz * 1.8);
-          p.vertex(-sz * 0.8, sz * 0.8);
-          p.bezierVertex(-sz * 1.5, -sz * 0.3, -sz * 1.2, -sz * 1.5, 0, -sz * 2.5);
-          p.endShape(p.CLOSE);
+          // Leaf shape: ellipse with point
+          p.fill(r, g, b, alpha * 220);
+          p.ellipse(0, 0, particle.size * 4, particle.size * 1.8);
           // Leaf vein
-          p.stroke(r * 0.65, g * 0.65, b * 0.65, alpha * 80);
-          p.strokeWeight(0.4);
-          p.line(0, -sz * 2.2, 0, sz * 1.5);
-          // Side veins
-          for (let v = -1; v <= 1; v += 1) {
-            const vy = v * sz * 1.0;
-            p.line(0, vy, sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-            p.line(0, vy, -sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-          }
+          p.stroke(r * 0.7, g * 0.7, b * 0.7, alpha * 100);
+          p.strokeWeight(0.5);
+          p.line(-particle.size * 1.5, 0, particle.size * 1.5, 0);
           p.pop();
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
+            // Wind-driven with noise-based turbulence
             const nx = p.noise(particle.life * 0.008, particle.seed) * 2 - 1;
             const ny = p.noise(particle.seed + 100, particle.life * 0.006) * 0.6;
             particle.x += particle.vx + nx * 1.5;
@@ -555,18 +542,18 @@
             particle.y = -20 - Math.random() * 40;
             particle.rotation = Math.random() * Math.PI * 2;
             particle.life = 0;
-            particle.depth = 0.3 + Math.random() * 0.7; // depth layer
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 1.2, vy: 0.4 + Math.random() * 0.8, size: 2 + Math.random() * 3, life: Math.random() * 200, splash: 0, seed: Math.random() * 1000, rotation: Math.random() * Math.PI * 2, depth: 0.3 + Math.random() * 0.7 };
+          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 1.2, vy: 0.4 + Math.random() * 0.8, size: 2 + Math.random() * 3, life: Math.random() * 200, splash: 0, seed: Math.random() * 1000, rotation: Math.random() * Math.PI * 2 };
         }
       },
 
       fireflies: {
-        count: 24, color: [200, 240, 80], gravity: 0, drift: 0.3,
+        count: 20, color: [200, 240, 80], gravity: 0, drift: 0.3,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
+          // Pulsing glow
           const pulse = 0.3 + Math.sin(particle.life * 0.06 + particle.seed) * 0.35;
           const nearPointer = particle.nearPointer || 0;
           const extraBright = nearPointer * 0.3;
@@ -583,35 +570,13 @@
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
-            // Noise drift
+            // Gentle floating with noise
             const nx = p.noise(particle.life * 0.005, particle.seed) * 2 - 1;
             const ny = p.noise(particle.seed + 50, particle.life * 0.004) * 2 - 1;
             particle.x += nx * 0.6 + particle.vx;
             particle.y += ny * 0.4 + particle.vy;
             particle.life += 1;
-            // Flocking — simple neighbor attraction (find 1-2 nearest, pull gently)
-            if (particles.length > 1) {
-              let nearestDist = Infinity, nearest = null;
-              for (const other of particles) {
-                if (other === particle) continue;
-                const dx = other.x - particle.x;
-                const dy = other.y - particle.y;
-                const d = dx * dx + dy * dy;
-                if (d < nearestDist && d < 90000) { // within 300px
-                  nearestDist = d;
-                  nearest = other;
-                }
-              }
-              if (nearest) {
-                const d = Math.sqrt(nearestDist);
-                particle.vx += (nearest.x - particle.x) / d * 0.015;
-                particle.vy += (nearest.y - particle.y) / d * 0.015;
-              }
-            }
-            // Damping
-            particle.vx *= 0.98;
-            particle.vy *= 0.98;
-            // Mouse interaction
+            // Mouse repulsion (gentle)
             if (typeof pointerX === "number") {
               const mx = pointerX * p.width;
               const my = pointerY * p.height;
@@ -629,8 +594,6 @@
             particle.x = Math.random() * p.width;
             particle.y = Math.random() * p.height;
             particle.life = 0;
-            particle.vx = (Math.random() - 0.5) * 0.3;
-            particle.vy = (Math.random() - 0.5) * 0.2;
           }
         },
         initParticle(w, h) {
@@ -643,19 +606,12 @@
     function renderEffect({ layer, kind, level, accent, mode, reducedMotion }) {
       if (!layer) return null;
       const effectiveKind = normalizeWeatherKind(kind || "");
-      const effectiveLevel = level || root.dataset.vrWeatherLevel || "low";
-      const effectiveReducedMotion = typeof reducedMotion === "boolean"
-        ? reducedMotion
-        : window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (mode === "guide") {
-        return null; // guide art runs on its own engine
+        // Guide mode: delegate to guide art engine (already running)
+        return null;
       }
-      // Temporarily set level for the engine to read
-      const prevLevel = root.dataset.vrWeatherLevel;
-      root.dataset.vrWeatherLevel = effectiveLevel;
-      const engine = createP5Weather(layer, effectiveKind);
-      root.dataset.vrWeatherLevel = prevLevel;
-      return engine;
+      // Weather mode: create/update the effect engine on the layer
+      return createP5Weather(layer, effectiveKind);
     }
 
     /* ── Canvas weather engine (fallback when p5 unavailable) ── */
@@ -860,21 +816,6 @@
               particle.life += 1;
             }
           }
-          // Global mouse illumination — subtle radial glow at cursor
-          if (typeof pointerX === "number" && !reduceMotion) {
-            const mx = pointerX * p.width;
-            const my = pointerY * p.height;
-            const glowSize = Math.min(p.width, p.height) * 0.15;
-            p.noStroke();
-            p.blendMode(p.SCREEN);
-            for (let i = 3; i > 0; i--) {
-              const s = glowSize * (i / 3);
-              const a = 4 * (4 - i);
-              p.fill(255, 240, 200, a);
-              p.circle(mx, my, s);
-            }
-            p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
-          }
         };
 
         p.vrUpdateLevel = rebuild;
@@ -895,14 +836,7 @@
       layer.dataset.vrWeatherKind = kind;
       destroyWeatherEngine();
       layer.replaceChildren();
-      weatherEngine = renderEffect({
-        layer,
-        kind,
-        level: weatherLevel,
-        accent: stages[activeStageIndex]?.uiAccent,
-        mode: "weather",
-        reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      }) || createP5Weather(layer, kind);
+      weatherEngine = createP5Weather(layer, kind);
     }
 
     function destroyWeatherEngine() {
@@ -1159,23 +1093,13 @@
 
           // Template-specific full-screen atmospheric shapes (no crosshair/center circle)
           if (motion.includes("window")) {
-            // Fog clearing: organic mist wisps that dissolve, not straight lines
-            for (let i = 0; i < 8; i++) {
-              const baseX = p.width * (0.15 + (i / 8) * 0.7);
-              const t = time * 0.7 + i * 1.2;
-              const y1 = p.noise(t, i * 0.3) * p.height;
-              const y2 = p.noise(t + 5, i * 0.3 + 2) * p.height;
-              const alpha = reduceMotion ? 6 : 10 + Math.sin(time + i) * 4;
-              p.stroke(220, 235, 240, alpha);
-              p.strokeWeight(1.5 + Math.sin(t * 0.5) * 0.8);
-              p.noFill();
-              p.beginShape();
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.cos(t * 0.2) * 30, (y1 + y2) / 2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
-              p.endShape();
+            // Fog clearing: vertical rain-like streaks that thin over time
+            p.stroke(255, 255, 255, reduceMotion ? 8 : 14);
+            p.strokeWeight(0.8);
+            for (let i = 0; i < 12; i++) {
+              const x = p.width * (0.1 + (i / 12) * 0.8);
+              const offset = Math.sin(time + i * 0.5) * 20;
+              p.line(x + offset, 0, x - offset * 0.3, p.height);
             }
           } else if (motion.includes("route")) {
             // Route line drawing forward
