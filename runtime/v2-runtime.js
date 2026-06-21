@@ -1194,7 +1194,8 @@
             ax: 0, ay: 0,
             size: (depth < 0.7 ? 1.2 : depth > 1.2 ? 4.0 : 2.2) * (0.7 + Math.random() * 0.6),
             depth, life: Math.random() * 100,
-            seed: Math.random() * 9999
+            seed: Math.random() * 9999,
+            active: true
           };
         },
         drawAll(p, particles, effect, reduceMotion, dt) {
