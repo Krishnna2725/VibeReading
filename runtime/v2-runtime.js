@@ -375,7 +375,8 @@
     function makeKey(o) {
       return [
         Math.round(o.radius), (o.color || [255, 255, 255]).join(","),
-        o.shape || "r", o.innerStop || 0, o.midStop || 0.45, o.outerStop || 1
+        o.shape || "r", o.innerStop || 0, o.midStop || 0.45, o.outerStop || 1,
+        o.blur || 0
       ].join(":");
     }
     function radial(o) {
@@ -589,7 +590,10 @@
       "oracle-card-reveal": "oracle-table-reveal"
     };
     const rawMotion = String(spec.entryGuide?.motion || spec.entryGuide?.layout || templateId).toLowerCase();
-    let guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion.includes(p.split("-")[0])) || rawMotion;
+    /* Exact match first, then fall back to prefix match */
+    let guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion === p)
+      || GUIDE_MOTION_PRESETS.find((p) => rawMotion === p.split("-").slice(0, -1).join("-"))
+      || rawMotion;
     if (OLD_PRESET_MAP[guideMotion]) guideMotion = OLD_PRESET_MAP[guideMotion];
     root.dataset.vrGuideMotion = guideMotion;
 
@@ -2018,7 +2022,14 @@
 
         p.draw = () => {
           clock.update(performance.now());
-          p._dt = clock.dt;
+          const dt = clock.dt;
+          /* Skip visual updates when hidden (clock paused) */
+          if (dt <= 0) return;
+          /* Update pointer smoothed coordinates */
+          const layerBounds = layer.getBoundingClientRect();
+          pointer.updateBounds({ left: layerBounds.left, top: layerBounds.top });
+          pointer.update(dt);
+          p._dt = dt;
           p._cache = localCache;
           p._pointer = pointer;
           p._particles = particles;
@@ -2026,13 +2037,13 @@
           p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
           if (effect.drawAll) {
             /* Bulk rendering mode (fog, rain with impacts, etc.) */
-            effect.drawAll(p, particles, effect, reduceMotion, clock.dt);
+            effect.drawAll(p, particles, effect, reduceMotion, dt);
           } else {
             for (const particle of particles) {
               effect.draw(p, particle, effect, reduceMotion);
               if (!reduceMotion) {
                 effect.tick(particle, p, reduceMotion);
-                particle.life += 1;
+                particle.life += dt * 60;
               }
             }
           }
@@ -2047,6 +2058,7 @@
         _clock: clock,
         updateLevel() { if (instance && instance.vrUpdateLevel) instance.vrUpdateLevel(); },
         destroy() {
+          if (localCache) { localCache.destroy(); localCache = null; }
           if (instance) instance.remove();
           instance = null;
         }
@@ -2262,6 +2274,8 @@
         let particles = [];
         let reduceMotion = false;
         let currentStep = 0;
+        const guideClock = createFrameClock();
+        let guideCache = null;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2280,11 +2294,14 @@
           canvas.parent(layer);
           p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
           p.frameRate(24);
+          guideCache = createGradientSpriteCache(p);
           rebuild();
         };
 
         p.windowResized = function () {
           p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+          if (guideCache) guideCache.destroy();
+          guideCache = createGradientSpriteCache(p);
           rebuild();
         };
 
@@ -2294,6 +2311,11 @@
         }
 
         p.draw = function () {
+          guideClock.update(performance.now());
+          if (guideClock.dt <= 0) return;
+          p._dt = guideClock.dt;
+          p._pointer = pointer;
+          p._cache = guideCache;
           p.clear();
           var time = p.frameCount * 0.016;
           currentStep = getStep();

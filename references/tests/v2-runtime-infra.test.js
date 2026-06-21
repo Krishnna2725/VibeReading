@@ -55,6 +55,7 @@ test("gradient stops are monotonically ordered (0 <= midStop <= 1)", () => {
   assert.match(runtime, /midStop = 0\.45/);
   assert.match(runtime, /outerStop = 1/);
   assert.match(runtime, /Math\.min\(0\.999, midStop\)/);
+  assert.match(runtime, /o\.blur \|\| 0/);
 });
 
 test("fireflies uses p._particles instead of outer scope particles variable", () => {
@@ -105,7 +106,7 @@ test("getIntensityProfile is exposed via test hooks", () => {
 test("p5 engine uses frame clock for dt", () => {
   assert.match(runtime, /const clock = createFrameClock\(\)/);
   assert.match(runtime, /clock\.update\(performance\.now\(\)\)/);
-  assert.match(runtime, /p\._dt = clock\.dt/);
+  assert.match(runtime, /const dt = clock\.dt/);
 });
 
 test("p5 engine creates and manages gradient cache", () => {
