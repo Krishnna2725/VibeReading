@@ -1071,7 +1071,7 @@
           const mainCtx = p.drawingContext;
           mainCtx.save();
           mainCtx.imageSmoothingEnabled = true;
-          mainCtx.globalCompositeOperation = (kind === "fog") ? "screen" : "source-over";
+          mainCtx.globalCompositeOperation = "source-over";
           p.image(pg, 0, 0, p.width, p.height);
           mainCtx.restore();
         },
@@ -1891,10 +1891,10 @@
       layer.dataset.vrWeatherEngine = "p5";
       const effect = VIBE_EFFECTS[kind] || VIBE_EFFECTS.dust;
       let instance = null;
+      const clock = createFrameClock();
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
-        const clock = createFrameClock();
         let localCache = null;
 
         function rebuild() {
