@@ -233,6 +233,293 @@
     };
   }
 
+  /* ──────────────────────────────────────────────────────────
+     FRAME CLOCK — unified dt source, second-precision
+     ────────────────────────────────────────────────────────── */
+  function createFrameClock() {
+    let lastTime = 0, _dt = 0, paused = false;
+    return {
+      get dt() { return _dt; },
+      update(now) {
+        if (paused) { _dt = 0; return; }
+        const raw = lastTime > 0 ? (now - lastTime) / 1000 : 0;
+        _dt = Math.min(0.05, Math.max(0, raw));
+        lastTime = now;
+      },
+      reset() { lastTime = 0; _dt = 0; },
+      pause() { paused = true; _dt = 0; },
+      resume() { paused = false; lastTime = 0; }
+    };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     POINTER TRACKER — smooth coordinates, velocity, idle
+     ────────────────────────────────────────────────────────── */
+  function createPointerTracker() {
+    const s = {
+      rawX: null, rawY: null, x: null, y: null,
+      vx: 0, vy: 0, speed: 0,
+      active: false, idleTime: 999,
+      bounds: { left: 0, top: 0 }
+    };
+    let bound = false, unbindFn = null;
+    function bind(target) {
+      if (bound) return;
+      bound = true;
+      const on = (e) => { s.rawX = e.clientX; s.rawY = e.clientY; s.active = true; s.idleTime = 0; };
+      const off = () => { s.active = false; };
+      target.addEventListener("mousemove", on, { passive: true });
+      target.addEventListener("pointerleave", off, { passive: true });
+      target.addEventListener("blur", off, { passive: true });
+      unbindFn = () => {
+        target.removeEventListener("mousemove", on);
+        target.removeEventListener("pointerleave", off);
+        target.removeEventListener("blur", off);
+        bound = false;
+      };
+    }
+    function update(dt) {
+      s.idleTime += dt;
+      if (s.rawX == null || s.rawY == null) {
+        s.vx *= 0.9; s.vy *= 0.9; s.speed *= 0.9; return;
+      }
+      const nx = s.rawX - s.bounds.left;
+      const ny = s.rawY - s.bounds.top;
+      if (s.x == null) { s.x = nx; s.y = ny; return; }
+      const dx = nx - s.x, dy = ny - s.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 160) { const r = 160 / d; s.x += dx * r; s.y += dy * r; }
+      else { s.x += dx * 0.18; s.y += dy * 0.18; }
+      const tvx = dt > 1e-6 ? dx / dt : 0;
+      const tvy = dt > 1e-6 ? dy / dt : 0;
+      s.vx = s.vx * 0.8 + tvx * 0.2;
+      s.vy = s.vy * 0.8 + tvy * 0.2;
+      s.speed = Math.hypot(s.vx, s.vy);
+    }
+    function updateBounds(b) { s.bounds = b; }
+    function destroy() { if (unbindFn) unbindFn(); }
+    return { state: s, bind, updateBounds, update, destroy };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     POINTER FIELD — force application for weather effects
+     ────────────────────────────────────────────────────────── */
+  function smoothFalloff(dist, radius) {
+    const t = Math.max(0, Math.min(1, 1 - dist / radius));
+    return t * t * (3 - 2 * t);
+  }
+  function applyPointerField(particle, tracker, cfg) {
+    const ps = tracker.state;
+    if (!ps.active || ps.x == null || ps.idleTime > (cfg.idleCutoff || 0.1)) return null;
+    const dx = ps.x - particle.x, dy = ps.y - particle.y;
+    const dist = Math.hypot(dx, dy) || 1e-4;
+    const radius = cfg.radius || 120;
+    if (dist >= radius) return null;
+    const k = smoothFalloff(dist, radius) * (cfg.strength || 1);
+    const nx = dx / dist, ny = dy / dist;
+    switch (cfg.mode) {
+      case "attract": particle.vx += nx * k; particle.vy += ny * k; break;
+      case "repel": particle.vx -= nx * k; particle.vy -= ny * k; break;
+      case "orbit": particle.vx += -ny * k * 0.8; particle.vy += nx * k * 0.8; break;
+      case "bend": particle.vx += ps.vx * 0.0005 * k; particle.vy += ps.vy * 0.0005 * k; break;
+      case "scatter":
+        particle.vx -= nx * k * (1 + Math.min(ps.speed / 1200, 1));
+        particle.vy -= ny * k * (1 + Math.min(ps.speed / 1200, 1));
+        break;
+      case "illuminate": particle.pointerGlow = Math.max(particle.pointerGlow || 0, k); break;
+      case "dissolve": particle.pointerErase = Math.max(particle.pointerErase || 0, k); break;
+      case "spawn-ripple": return { type: "ripple", x: ps.x, y: ps.y, power: k };
+    }
+    return null;
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     PARTICLE POOL — fixed-capacity pre-allocated pool
+     ────────────────────────────────────────────────────────── */
+  function createParticlePool(maxSize) {
+    const items = [], free = [];
+    for (let i = 0; i < maxSize; i++) { items.push({ active: false }); free.push(i); }
+    return {
+      spawn(init) {
+        if (!free.length) return null;
+        const i = free.pop(), p = items[i];
+        p.active = true; p._i = i; init(p); return p;
+      },
+      deactivate(p) { if (p && p.active) { p.active = false; free.push(p._i); } },
+      forEach(fn) { for (let i = 0; i < items.length; i++) { if (items[i].active) fn(items[i], i); } },
+      count() { return items.length - free.length; },
+      clear() {
+        for (const p of items) p.active = false;
+        free.length = 0;
+        for (let i = 0; i < maxSize; i++) free.push(i);
+      }
+    };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     GRADIENT SPRITE CACHE — cached radial gradients
+     ────────────────────────────────────────────────────────── */
+  function createGradientSpriteCache(p) {
+    const cache = new Map();
+    const MAX = 64;
+    function makeKey(o) {
+      return [
+        Math.round(o.radius), (o.color || [255, 255, 255]).join(","),
+        o.shape || "r", o.innerStop || 0, o.midStop || 0.45, o.outerStop || 1
+      ].join(":");
+    }
+    function radial(o) {
+      const k = makeKey(o);
+      if (cache.has(k)) return cache.get(k);
+      if (cache.size >= MAX) {
+        const fk = cache.keys().next().value;
+        const old = cache.get(fk);
+        if (old && old.remove) old.remove();
+        cache.delete(fk);
+      }
+      const {
+        radius = 64, color = [255, 255, 255], alpha = 1,
+        innerStop = 0, midStop = 0.45, outerStop = 1,
+        innerAlpha = 1, midAlpha = 0.18, outerAlpha = 0,
+        blur = 0, shape = "r"
+      } = o;
+      const pad = blur * 2;
+      const size = Math.ceil(radius * 2 + pad * 2);
+      const pg = p.createGraphics(size, size);
+      const ctx = pg.drawingContext;
+      pg.clear();
+      if (blur > 0) try { ctx.filter = "blur(" + blur + "px)"; } catch (e) { /* ignore */ }
+      const cx = size / 2, cy = size / 2;
+      const g = ctx.createRadialGradient(cx, cy, radius * innerStop, cx, cy, radius * outerStop);
+      const cr = color[0], cg = color[1], cb = color[2];
+      g.addColorStop(0, "rgba(" + cr + "," + cg + "," + cb + "," + (innerAlpha * alpha) + ")");
+      g.addColorStop(Math.min(0.999, midStop), "rgba(" + cr + "," + cg + "," + cb + "," + (midAlpha * alpha) + ")");
+      g.addColorStop(1, "rgba(" + cr + "," + cg + "," + cb + "," + (outerAlpha * alpha) + ")");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      if (shape === "e") ctx.ellipse(cx, cy, radius, radius * 0.6, 0, 0, Math.PI * 2);
+      else ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      try { ctx.filter = "none"; } catch (e) { /* ignore */ }
+      cache.set(k, pg);
+      return pg;
+    }
+    function draw(sprite, x, y, w, h, mode, alpha) {
+      if (!sprite) return;
+      const ctx = p.drawingContext;
+      ctx.save();
+      ctx.globalCompositeOperation = mode || "source-over";
+      ctx.globalAlpha = (alpha != null ? alpha : 255) / 255;
+      p.image(sprite, x - w / 2, y - h / 2, w, h != null ? h : w);
+      ctx.restore();
+    }
+    function destroy() {
+      cache.forEach(function (pg) { if (pg && pg.remove) pg.remove(); });
+      cache.clear();
+    }
+    return { radial, draw, destroy, get size() { return cache.size; } };
+  }
+
+  /* ── Mouse glow using gradient sprite ── */
+  function drawMouseGlow(p, tracker, cache) {
+    if (!tracker || !cache) return;
+    const s = tracker.state;
+    if (!s.active || s.x == null || s.y == null) return;
+    const idleFade = Math.max(0, 1 - s.idleTime * 0.6);
+    if (idleFade <= 0) return;
+    const sz = Math.min(p.width, p.height) * 0.18;
+    const sprite = cache.radial({
+      radius: 64, color: [255, 240, 200], alpha: 0.09 * idleFade,
+      midAlpha: 0.025, midStop: 0.5, outerAlpha: 0
+    });
+    cache.draw(sprite, s.x, s.y, sz, sz, "screen", 255);
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     INTENSITY PROFILES — per-weather medium/high semantics
+     ────────────────────────────────────────────────────────── */
+  const INTENSITY_PROFILES = {
+    rain: {
+      off: { spawnScale: 0, gust: 0, impacts: 0, nearWeight: 0, glare: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1, gust: 0.8, impacts: 0.6, nearWeight: 0.8, glare: 0.25, turbulence: 0.5, pointerStrength: 0.6 },
+      high: { spawnScale: 1.2, gust: 1.4, impacts: 1.0, nearWeight: 1.3, glare: 0.6, turbulence: 0.8, pointerStrength: 0.8 }
+    },
+    "storm-rain": {
+      off: { spawnScale: 0, gust: 0, impacts: 0, nearWeight: 0, glare: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1.3, gust: 1.5, impacts: 0.8, nearWeight: 1.0, glare: 0.35, turbulence: 0.7, pointerStrength: 0.5 },
+      high: { spawnScale: 1.6, gust: 2.2, impacts: 1.2, nearWeight: 1.5, glare: 0.7, turbulence: 1.0, pointerStrength: 0.6 }
+    },
+    fog: {
+      off: { coverage: 0, speed: 0, parallax: 0, erase: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { coverage: 0.55, speed: 0.8, parallax: 1.0, erase: 0.35, turbulence: 0.3, pointerStrength: 0.4 },
+      high: { coverage: 0.78, speed: 1.0, parallax: 1.25, erase: 0.55, turbulence: 0.5, pointerStrength: 0.55 }
+    },
+    snow: {
+      off: { spawnScale: 0, flowAmp: 0, pointer: 0, nearWeight: 0, swirl: 0, turbulence: 0 },
+      medium: { spawnScale: 1, flowAmp: 0.8, pointer: 0.55, nearWeight: 0.8, swirl: 0.25, turbulence: 0.3 },
+      high: { spawnScale: 1.15, flowAmp: 1.2, pointer: 0.8, nearWeight: 1.1, swirl: 0.55, turbulence: 0.5 }
+    },
+    wind: {
+      off: { spawnScale: 0, gustAmp: 0, pointerStrength: 0, turbulence: 0 },
+      medium: { spawnScale: 1, gustAmp: 0.8, pointerStrength: 0.6, turbulence: 0.4 },
+      high: { spawnScale: 1.2, gustAmp: 1.3, pointerStrength: 0.8, turbulence: 0.7 }
+    },
+    ripple: {
+      off: { spawnScale: 0, pointerStrength: 0, eventRate: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, eventRate: 0.6 },
+      high: { spawnScale: 1.1, pointerStrength: 0.7, eventRate: 1.0 }
+    },
+    water: {
+      off: { spawnScale: 0, pointerStrength: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.4, turbulence: 0.3 },
+      high: { spawnScale: 1.1, pointerStrength: 0.6, turbulence: 0.5 }
+    },
+    dust: {
+      off: { spawnScale: 0, pointerStrength: 0, visibility: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, visibility: 0.6, turbulence: 0.3 },
+      high: { spawnScale: 1.15, pointerStrength: 0.5, visibility: 0.8, turbulence: 0.5 }
+    },
+    embers: {
+      off: { spawnScale: 0, pointerStrength: 0, reignite: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, reignite: 0.15, turbulence: 0.4 },
+      high: { spawnScale: 1.2, pointerStrength: 0.4, reignite: 0.3, turbulence: 0.6 }
+    },
+    fire: {
+      off: { spawnScale: 0, pointerStrength: 0, height: 0, turbulence: 0, emberBurst: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, height: 1, turbulence: 0.5, emberBurst: 0.2 },
+      high: { spawnScale: 1.15, pointerStrength: 0.4, height: 1.3, turbulence: 0.8, emberBurst: 0.5 }
+    },
+    signal: {
+      off: { spawnScale: 0, noiseBurst: 0, stability: 0 },
+      medium: { spawnScale: 1, noiseBurst: 0.3, stability: 0.7 },
+      high: { spawnScale: 1.1, noiseBurst: 0.6, stability: 0.4 }
+    },
+    paper: {
+      off: { spawnScale: 0, pointerStrength: 0, tumble: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, tumble: 0.6, turbulence: 0.3 },
+      high: { spawnScale: 1.15, pointerStrength: 0.7, tumble: 0.9, turbulence: 0.5 }
+    },
+    stars: {
+      off: { spawnScale: 0, twinkle: 0, flareChance: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1, twinkle: 0.6, flareChance: 0.08, pointerStrength: 0.2 },
+      high: { spawnScale: 1.1, twinkle: 0.8, flareChance: 0.15, pointerStrength: 0.3 }
+    },
+    leaves: {
+      off: { spawnScale: 0, pointerStrength: 0, gustAmp: 0, tumble: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, gustAmp: 0.7, tumble: 0.6 },
+      high: { spawnScale: 1.15, pointerStrength: 0.7, gustAmp: 1.1, tumble: 0.9 }
+    },
+    fireflies: {
+      off: { spawnScale: 0, pointerStrength: 0, flockWeight: 0, breathe: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.4, flockWeight: 0.3, breathe: 0.6 },
+      high: { spawnScale: 1.1, pointerStrength: 0.55, flockWeight: 0.5, breathe: 0.8 }
+    }
+  };
+  function getIntensityProfile(kind, level) {
+    const p = INTENSITY_PROFILES[kind] || INTENSITY_PROFILES.dust;
+    return p[level] || p.medium;
+  }
+
   function init() {
     const spec = window.VIBE_READING_SPEC;
     if (!spec) {
@@ -472,13 +759,20 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const alpha = 80 + Math.sin(particle.life * 0.02 + particle.seed) * 35;
-          p.noStroke();
-          // Outer glow for depth
-          p.fill(r, g, b, alpha * 0.3);
-          p.circle(particle.x, particle.y, particle.size * 4);
-          // Core
-          p.fill(r, g, b, alpha);
-          p.circle(particle.x, particle.y, particle.size * 2);
+          const cache = p._cache;
+          if (cache) {
+            const sprite = cache.radial({
+              radius: 18, color: [r, g, b], alpha: 1,
+              midAlpha: 0.18, midStop: 0.45, outerAlpha: 0
+            });
+            cache.draw(sprite, particle.x, particle.y, particle.size * 6, particle.size * 6, "source-over", alpha);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, alpha * 0.3);
+            p.circle(particle.x, particle.y, particle.size * 4);
+            p.fill(r, g, b, alpha);
+            p.circle(particle.x, particle.y, particle.size * 2);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
@@ -618,11 +912,27 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const glow = 0.4 + Math.sin(particle.life * 0.1) * 0.3;
-          p.noStroke();
-          p.fill(r, g, b, glow * 200);
-          p.circle(particle.x, particle.y, particle.size * 2);
-          p.fill(255, 200, 100, glow * 80);
-          p.circle(particle.x, particle.y, particle.size * 5);
+          const cache = p._cache;
+          if (cache) {
+            /* Color core */
+            const coreSprite = cache.radial({
+              radius: 14, color: [r, g, b], alpha: 1,
+              midAlpha: 0.4, midStop: 0.35, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 4, particle.size * 4, "source-over", glow * 220);
+            /* Warm halo */
+            const haloSprite = cache.radial({
+              radius: 28, color: [255, 200, 100], alpha: 1,
+              midAlpha: 0.1, midStop: 0.4, outerAlpha: 0
+            });
+            cache.draw(haloSprite, particle.x, particle.y, particle.size * 6, particle.size * 6, "screen", glow * 90);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, glow * 200);
+            p.circle(particle.x, particle.y, particle.size * 2);
+            p.fill(255, 200, 100, glow * 80);
+            p.circle(particle.x, particle.y, particle.size * 5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) { particle.x += particle.vx + Math.sin(particle.life * 0.04) * 0.8; particle.y += particle.vy; particle.life += 1; }
@@ -643,18 +953,36 @@
         count: 40, color: [255, 140, 40], gravity: -1.2, drift: 0.8,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          // Noise-based flicker instead of simple sin
           const flicker = 0.4 + p.noise(particle.life * 0.04, particle.seed) * 0.5;
-          p.noStroke();
-          // Outer heat glow
-          p.fill(255, 100, 20, flicker * 40);
-          p.circle(particle.x, particle.y, particle.size * 8);
-          // Mid flame
-          p.fill(r, g, b, flicker * 160);
-          p.circle(particle.x, particle.y, particle.size * 3.5);
-          // Hot core
-          p.fill(255, 230, 120, flicker * 200);
-          p.circle(particle.x, particle.y, particle.size * 1.5);
+          const cache = p._cache;
+          if (cache) {
+            /* Outer heat glow — elongated */
+            const heatSprite = cache.radial({
+              radius: 32, color: [255, 100, 20], alpha: 1,
+              midAlpha: 0.06, midStop: 0.4, outerAlpha: 0, shape: "e"
+            });
+            cache.draw(heatSprite, particle.x, particle.y, particle.size * 8, particle.size * 10, "screen", flicker * 50);
+            /* Mid flame — warm continuous volume */
+            const flameSprite = cache.radial({
+              radius: 20, color: [r, g, b], alpha: 1,
+              midAlpha: 0.35, midStop: 0.35, outerAlpha: 0, shape: "e"
+            });
+            cache.draw(flameSprite, particle.x, particle.y, particle.size * 4, particle.size * 5, "source-over", flicker * 180);
+            /* Hot core */
+            const coreSprite = cache.radial({
+              radius: 10, color: [255, 230, 120], alpha: 1,
+              midAlpha: 0.5, midStop: 0.3, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 1.8, particle.size * 2, "screen", flicker * 200);
+          } else {
+            p.noStroke();
+            p.fill(255, 100, 20, flicker * 40);
+            p.circle(particle.x, particle.y, particle.size * 8);
+            p.fill(r, g, b, flicker * 160);
+            p.circle(particle.x, particle.y, particle.size * 3.5);
+            p.fill(255, 230, 120, flicker * 200);
+            p.circle(particle.x, particle.y, particle.size * 1.5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
@@ -733,12 +1061,29 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const twinkle = 0.3 + Math.sin(particle.life * 0.05 + particle.seed) * 0.3;
-          p.noStroke();
-          p.fill(r, g, b, twinkle * 255);
-          p.circle(particle.x, particle.y, particle.size * 2);
-          if (particle.size > 2.5) {
-            p.fill(r, g, b, twinkle * 40);
-            p.circle(particle.x, particle.y, particle.size * 5);
+          const cache = p._cache;
+          if (cache) {
+            const coreAlpha = twinkle * 255;
+            const coreSprite = cache.radial({
+              radius: 12, color: [r, g, b], alpha: 1,
+              midAlpha: 0.3, midStop: 0.5, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 3, particle.size * 3, "source-over", coreAlpha);
+            if (particle.size > 2.5) {
+              const flareSprite = cache.radial({
+                radius: 24, color: [r, g, b], alpha: 1,
+                midAlpha: 0.08, midStop: 0.35, outerAlpha: 0, shape: "r"
+              });
+              cache.draw(flareSprite, particle.x, particle.y, particle.size * 5, particle.size * 5, "screen", twinkle * 60);
+            }
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, twinkle * 255);
+            p.circle(particle.x, particle.y, particle.size * 2);
+            if (particle.size > 2.5) {
+              p.fill(r, g, b, twinkle * 40);
+              p.circle(particle.x, particle.y, particle.size * 5);
+            }
           }
         },
         tick(particle, p, reduceMotion) {
@@ -812,36 +1157,58 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const pulse = 0.3 + Math.sin(particle.life * 0.06 + particle.seed) * 0.35;
-          const nearPointer = particle.nearPointer || 0;
-          const extraBright = nearPointer * 0.3;
-          p.noStroke();
-          // Outer glow
-          p.fill(r, g, b, pulse * 30 + extraBright * 20);
-          p.circle(particle.x, particle.y, particle.size * 12);
-          // Inner glow
-          p.fill(r, g, b, pulse * 100 + extraBright * 60);
-          p.circle(particle.x, particle.y, particle.size * 4);
-          // Core
-          p.fill(255, 255, 220, pulse * 220 + extraBright * 35);
-          p.circle(particle.x, particle.y, particle.size * 1.5);
+          const extraBright = (particle.pointerGlow || 0) * 0.3;
+          const cache = p._cache;
+          if (cache) {
+            /* Outer halo — additive only for inner part */
+            const haloSprite = cache.radial({
+              radius: 24, color: [r, g, b], alpha: 1,
+              midAlpha: 0.06, midStop: 0.35, outerAlpha: 0
+            });
+            cache.draw(haloSprite, particle.x, particle.y, particle.size * 12, particle.size * 12, "source-over", pulse * 30 + extraBright * 20);
+            /* Inner glow */
+            const innerSprite = cache.radial({
+              radius: 14, color: [r, g, b], alpha: 1,
+              midAlpha: 0.25, midStop: 0.4, outerAlpha: 0
+            });
+            cache.draw(innerSprite, particle.x, particle.y, particle.size * 4, particle.size * 4, "source-over", pulse * 100 + extraBright * 60);
+            /* Hot core — additive */
+            const coreSprite = cache.radial({
+              radius: 8, color: [255, 255, 220], alpha: 1,
+              midAlpha: 0.5, midStop: 0.3, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 1.8, particle.size * 1.8, "screen", pulse * 200 + extraBright * 35);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, pulse * 30 + extraBright * 20);
+            p.circle(particle.x, particle.y, particle.size * 12);
+            p.fill(r, g, b, pulse * 100 + extraBright * 60);
+            p.circle(particle.x, particle.y, particle.size * 4);
+            p.fill(255, 255, 220, pulse * 220 + extraBright * 35);
+            p.circle(particle.x, particle.y, particle.size * 1.5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
-            // Noise drift
+            /* Noise drift */
             const nx = p.noise(particle.life * 0.005, particle.seed) * 2 - 1;
             const ny = p.noise(particle.seed + 50, particle.life * 0.004) * 2 - 1;
-            particle.x += nx * 0.6 + particle.vx;
-            particle.y += ny * 0.4 + particle.vy;
+            particle.vx += nx * 0.04;
+            particle.vy += ny * 0.03;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
             particle.life += 1;
-            // Flocking — simple neighbor attraction (find 1-2 nearest, pull gently)
-            if (particles.length > 1) {
+            /* Flocking — use p._particles instead of outer scope variable */
+            const allParticles = p._particles;
+            if (allParticles && allParticles.length > 1) {
               let nearestDist = Infinity, nearest = null;
-              for (const other of particles) {
-                if (other === particle) continue;
+              for (let i = 0; i < allParticles.length; i++) {
+                const other = allParticles[i];
+                if (other === particle || !other.active) continue;
                 const dx = other.x - particle.x;
                 const dy = other.y - particle.y;
                 const d = dx * dx + dy * dy;
-                if (d < nearestDist && d < 90000) { // within 300px
+                if (d < nearestDist && d < 90000) {
                   nearestDist = d;
                   nearest = other;
                 }
@@ -852,21 +1219,22 @@
                 particle.vy += (nearest.y - particle.y) / d * 0.015;
               }
             }
-            // Damping
+            /* Damping */
             particle.vx *= 0.98;
             particle.vy *= 0.98;
-            // Mouse interaction
-            if (typeof pointerX === "number") {
-              const mx = pointerX * p.width;
-              const my = pointerY * p.height;
-              const dx = particle.x - mx;
-              const dy = particle.y - my;
+            /* Pointer interaction — force-based instead of direct position */
+            applyPointerField(particle, p._pointer, {
+              mode: "repel", radius: 120, strength: 0.03, idleCutoff: 0.1
+            });
+            /* Pointer glow feedback */
+            const ps = p._pointer && p._pointer.state;
+            if (ps && ps.active && ps.x != null) {
+              const dx = particle.x - ps.x;
+              const dy = particle.y - ps.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              particle.nearPointer = dist < 120 ? (1 - dist / 120) : 0;
-              if (dist < 100 && dist > 0) {
-                particle.x += (dx / dist) * 0.8;
-                particle.y += (dy / dist) * 0.5;
-              }
+              particle.pointerGlow = dist < 120 ? (1 - dist / 120) : 0;
+            } else {
+              particle.pointerGlow = (particle.pointerGlow || 0) * 0.9;
             }
           }
           if (particle.x < -30 || particle.x > p.width + 30 || particle.y < -30 || particle.y > p.height + 30) {
@@ -878,7 +1246,7 @@
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2, size: 0.8 + Math.random() * 1.2, life: Math.random() * 400, splash: 0, seed: Math.random() * 1000, nearPointer: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2, size: 0.8 + Math.random() * 1.2, life: Math.random() * 400, splash: 0, seed: Math.random() * 1000, pointerGlow: 0 };
         }
       }
     };
@@ -1072,13 +1440,15 @@
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
+        const clock = createFrameClock();
+        let localCache = null;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
           const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
-          const mult = lvl === "off" ? 0 : lvl === "high" ? 1.55 : 1;
-          const reducedMult = lvl === "off" ? 0 : lvl === "high" ? 0.25 : 0.18;
-          const count = reduceMotion ? Math.ceil(effect.count * reducedMult) : Math.ceil(effect.count * mult);
+          const profile = getIntensityProfile(kind, lvl);
+          const spawnScale = reduceMotion ? (lvl === "off" ? 0 : 0.18) : profile.spawnScale;
+          const count = Math.ceil(effect.count * spawnScale);
           particles = Array.from({ length: count }, () => effect.initParticle(p.width, p.height));
         }
 
@@ -1088,15 +1458,23 @@
           canvas.parent(layer);
           p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
           p.frameRate(30);
+          localCache = createGradientSpriteCache(p);
           rebuild();
         };
 
         p.windowResized = () => {
           p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+          if (localCache) localCache.destroy();
+          localCache = createGradientSpriteCache(p);
           rebuild();
         };
 
         p.draw = () => {
+          clock.update(performance.now());
+          p._dt = clock.dt;
+          p._cache = localCache;
+          p._pointer = pointer;
+          p._particles = particles;
           p.clear();
           p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
           for (const particle of particles) {
@@ -1106,29 +1484,19 @@
               particle.life += 1;
             }
           }
-          // Global mouse illumination — subtle radial glow at cursor
-          if (typeof pointerX === "number" && !reduceMotion) {
-            const mx = pointerX * p.width;
-            const my = pointerY * p.height;
-            const glowSize = Math.min(p.width, p.height) * 0.15;
-            p.noStroke();
-            p.blendMode(p.SCREEN);
-            for (let i = 3; i > 0; i--) {
-              const s = glowSize * (i / 3);
-              const a = 4 * (4 - i);
-              p.fill(255, 240, 200, a);
-              p.circle(mx, my, s);
-            }
-            p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
-          }
+          /* Mouse glow using gradient sprite instead of concentric circles */
+          if (!reduceMotion) drawMouseGlow(p, pointer, localCache);
         };
 
         p.vrUpdateLevel = rebuild;
       };
       instance = new window.p5(sketch);
       return {
-        updateLevel() { if (instance?.vrUpdateLevel) instance.vrUpdateLevel(); },
-        destroy() { if (instance) instance.remove(); instance = null; }
+        updateLevel() { if (instance && instance.vrUpdateLevel) instance.vrUpdateLevel(); },
+        destroy() {
+          if (instance) instance.remove();
+          instance = null;
+        }
       };
     }
 
@@ -1169,12 +1537,14 @@
       window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level: weatherLevel, stage, index: activeStageIndex } }));
     }
 
-    /* ── Pointer state (mouse illumination) ── */
-    let pointerX = 0.5, pointerY = 0.5;
-    document.addEventListener("mousemove", (e) => {
-      pointerX = e.clientX / window.innerWidth;
-      pointerY = e.clientY / window.innerHeight;
-    }, { passive: true });
+    /* ── Pointer tracker ── */
+    const pointer = createPointerTracker();
+    pointer.bind(window);
+    function syncPointerBounds() {
+      const layer = $("[data-vr-weather]");
+      if (layer) pointer.updateBounds(layer.getBoundingClientRect());
+    }
+    syncPointerBounds();
 
     /* ── Sound system — sequential BGM-first fallback ── */
     function setBgmVolume(vol) {
@@ -1632,6 +2002,12 @@
   if (typeof window !== "undefined") {
     window.__VIBE_READING_TEST_HOOKS = Object.assign({}, window.__VIBE_READING_TEST_HOOKS, {
       createAudioController,
+      createFrameClock,
+      createPointerTracker,
+      createGradientSpriteCache,
+      createParticlePool,
+      getIntensityProfile,
+      smoothFalloff,
     });
   }
 
