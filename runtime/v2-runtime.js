@@ -1146,34 +1146,43 @@
         count: 48, color: [236, 232, 214], gravity: 0.5, drift: 5.5, streak: true,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          const alpha = 50 + Math.sin(particle.life * 0.03 + particle.seed) * 22;
+          const alpha = 40 + Math.sin(particle.life * 0.03 + particle.seed) * 25;
           p.stroke(r, g, b, alpha);
-          p.strokeWeight(0.8);
-          // Curved streak using noise
+          p.strokeWeight(particle.depth > 1 ? 1.2 : 0.6);
+          /* Continuous curved streak using multiple sample points */
           p.noFill();
           p.beginShape();
-          for (let i = 0; i < 4; i++) {
-            const t = particle.life + i * 3;
-            const wobble = p.noise(t * 0.02, particle.seed) * 16 - 8;
-            p.curveVertex(particle.x + i * particle.size * 0.3, particle.y + wobble);
+          for (let i = 0; i < 6; i++) {
+            const t = particle.life + i * 2.5;
+            const wobble = p.noise(t * 0.015, particle.seed) * 20 - 10;
+            const bendX = p.noise(t * 0.008, particle.seed + 100) * 8 - 4;
+            p.curveVertex(particle.x + i * particle.size * 0.25 + bendX, particle.y + wobble + i * 2);
           }
           p.endShape();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based wind gusts
-            const gust = p.noise(particle.life * 0.01, particle.seed) * 3;
-            particle.x += particle.vx + gust;
-            particle.y += particle.vy + p.noise(particle.seed + 300, particle.life * 0.008) * 1.5 - 0.75;
-            particle.life += 1;
-          }
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("wind", lvl);
+          /* Flow field wind */
+          const gust = p.noise(particle.life * 0.008, particle.seed) * profile.gustAmp;
+          const vertical = p.noise(particle.seed + 300, particle.life * 0.006) * 0.8 - 0.4;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 150,
+            strength: 0.8 * profile.pointerStrength, idleCutoff: 0.08
+          });
+          particle.x += particle.vx + gust;
+          particle.y += particle.vy + vertical;
+          particle.life += 1;
           if (particle.x > p.width + particle.size) {
             particle.x = -p.width * 0.2;
             particle.y = Math.random() * p.height;
+            particle.depth = 0.5 + Math.random() * 0.8;
           }
         },
         initParticle(w, h) {
-          return { x: -w * 0.2 + Math.random() * w * 1.2, y: Math.random() * h, vx: 3 + Math.random() * 7, vy: (Math.random() - 0.5) * 0.7, size: 30 + Math.random() * 120, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
+          return { x: -w * 0.2 + Math.random() * w * 1.2, y: Math.random() * h, vx: 3 + Math.random() * 7, vy: (Math.random() - 0.5) * 0.7, size: 30 + Math.random() * 120, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000, depth: 0.5 + Math.random() * 0.8 };
         }
       },
 
@@ -1181,27 +1190,38 @@
         count: 12, color: [180, 200, 220], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
+          const t = particle.life / (particle.maxLife || 100);
+          const ease = 1 - (1 - t) * (1 - t);
           p.noFill();
-          p.stroke(r, g, b, 40 + particle.life * 0.3);
+          /* Elliptical perspective compression */
+          const rx = particle.size * (1 + ease * 1.5);
+          const ry = rx * (0.28 + particle.ecc * 0.12);
+          p.stroke(r, g, b, (1 - t) * 60);
           p.strokeWeight(0.8);
-          const radius = particle.size * (1 + particle.life * 0.08);
-          p.circle(particle.x, particle.y, radius);
-          if (radius > 20) {
-            p.stroke(r, g, b, 20 + particle.life * 0.15);
-            p.circle(particle.x, particle.y, radius * 0.6);
+          p.ellipse(particle.x, particle.y, rx * 2, ry * 2);
+          /* Inner ring with different phase */
+          if (rx > 15) {
+            const innerRx = rx * 0.55;
+            const innerRy = ry * 0.55;
+            p.stroke(r, g, b, (1 - t) * 25);
+            p.ellipse(particle.x + particle.ox, particle.y + particle.oy, innerRx * 2, innerRy * 2);
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) particle.life += 0.5;
-          if (particle.life > 100) {
+          if (!reduceMotion) particle.life += 0.6;
+          if (particle.life > (particle.maxLife || 100)) {
             particle.x = Math.random() * p.width;
             particle.y = Math.random() * p.height;
             particle.life = 0;
             particle.size = 10 + Math.random() * 30;
+            particle.maxLife = 80 + Math.random() * 40;
+            particle.ecc = Math.random() * 0.3;
+            particle.ox = (Math.random() - 0.5) * 4;
+            particle.oy = (Math.random() - 0.5) * 2;
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: 0, vy: 0, size: 10 + Math.random() * 30, life: Math.random() * 80, splash: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: 0, vy: 0, size: 10 + Math.random() * 30, life: Math.random() * 80, splash: 0, maxLife: 80 + Math.random() * 40, ecc: Math.random() * 0.3, ox: (Math.random() - 0.5) * 4, oy: (Math.random() - 0.5) * 2 };
         }
       },
 
@@ -1209,17 +1229,29 @@
         count: 20, color: [160, 195, 215], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.noFill();
-          p.stroke(r, g, b, 30 + Math.sin(particle.life * 0.05) * 15);
-          p.strokeWeight(0.6);
           const wave = Math.sin(particle.life * 0.03 + particle.x * 0.01) * 12;
+          const highlight = Math.sin(particle.life * 0.05 + particle.x * 0.008) * 0.5 + 0.5;
+          /* Main wave line */
+          p.noFill();
+          p.stroke(r, g, b, 25 + highlight * 18);
+          p.strokeWeight(0.6);
           p.beginShape();
-          for (let i = 0; i < 5; i++) {
-            const wx = particle.x + (i - 2) * 30;
+          for (let i = 0; i < 7; i++) {
+            const wx = particle.x + (i - 3) * 28;
             const wy = particle.y + Math.sin(particle.life * 0.04 + i * 0.8) * 6 + wave;
             p.curveVertex(wx, wy);
           }
           p.endShape();
+          /* Thin highlight strip */
+          if (highlight > 0.6 && particle.y > p.height * 0.4) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.stroke(220, 235, 245, (highlight - 0.6) * 40);
+            p.strokeWeight(0.4);
+            p.line(particle.x - 20, particle.y - 1, particle.x + 40, particle.y - 1);
+            ctx.restore();
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) { particle.life += 0.8; particle.x += 0.3; }
@@ -1238,12 +1270,32 @@
         count: 46, color: [239, 219, 164], gravity: 0.45, drift: 0.9,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.noStroke();
-          p.fill(r, g, b, 115);
-          p.circle(particle.x, particle.y, particle.size * 2);
+          /* Visibility controlled by depth and life */
+          const brightness = 0.3 + Math.sin(particle.life * 0.02 + particle.seed) * 0.15;
+          const depthAlpha = particle.depth > 1.2 ? 140 : particle.depth < 0.7 ? 60 : 100;
+          const cache = p._cache;
+          if (cache) {
+            const sprite = cache.radial({
+              radius: 10, color: [r, g, b], alpha: brightness,
+              midAlpha: 0.2, midStop: 0.4, outerAlpha: 0
+            });
+            const sz = particle.size * (1 + particle.depth) * 3;
+            cache.draw(sprite, particle.x, particle.y, sz, sz, "source-over", depthAlpha);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, depthAlpha * brightness);
+            p.circle(particle.x, particle.y, particle.size * 2);
+          }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; particle.life += 1; }
+          if (reduceMotion) return;
+          /* Pointer scatter — gentle, not explosive */
+          applyPointerField(particle, p._pointer, {
+            mode: "scatter", radius: 100, strength: 0.3, idleCutoff: 0.15
+          });
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.life += 1;
           if (particle.y > p.height + particle.size || particle.x > p.width + particle.size || particle.x < -particle.size) {
             particle.x = Math.random() * p.width;
             particle.y = -particle.size;
@@ -1252,7 +1304,7 @@
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.9, vy: 0.45 * (0.45 + Math.random() * 0.9), size: 0.8 + Math.random() * 2.8, life: Math.random() * 100, splash: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.9, vy: 0.45 * (0.45 + Math.random() * 0.9), size: 0.8 + Math.random() * 2.8, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000, depth: 0.5 + Math.random() * 0.8 };
         }
       },
 
@@ -1357,16 +1409,28 @@
         count: 24, color: [150, 230, 150], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 25 + Math.sin(particle.life * 0.08) * 15);
-          p.strokeWeight(0.8);
+          /* Scanline with wobble */
           const y = particle.y;
           const wobble = Math.sin(particle.life * 0.15 + y * 0.03) * (3 + particle.size);
+          p.stroke(r, g, b, 20 + Math.sin(particle.life * 0.08) * 12);
+          p.strokeWeight(0.6);
           p.line(0, y + wobble, p.width, y - wobble * 0.2);
-          // Scanline bright spot
-          if (Math.abs(y - (particle.life * 2) % p.height) < 20) {
-            p.stroke(r, g, b, 50);
-            p.strokeWeight(2);
+          /* Bright sweep spot */
+          const sweepY = (particle.life * 1.5) % p.height;
+          const dist = Math.abs(y - sweepY);
+          if (dist < 25) {
+            const intensity = (1 - dist / 25);
+            p.stroke(r, g, b, 45 * intensity);
+            p.strokeWeight(1.5);
             p.line(0, y, p.width, y);
+          }
+          /* Noise burst — occasional short horizontal glitch */
+          if (particle.life % 60 < 2 && particle.depth > 0.8) {
+            const burstY = y + (Math.random() - 0.5) * 20;
+            p.stroke(r, g, b, 30);
+            p.strokeWeight(0.5);
+            const bx = Math.random() * p.width;
+            p.line(bx, burstY, bx + 30 + Math.random() * 60, burstY);
           }
         },
         tick(particle, p, reduceMotion) {
@@ -1374,7 +1438,7 @@
           if (particle.life > 300) particle.life = 0;
         },
         initParticle(w, h) {
-          return { x: 0, y: Math.random() * h, vx: 0, vy: 0, size: 1 + Math.random() * 3, life: Math.random() * 250, splash: 0 };
+          return { x: 0, y: Math.random() * h, vx: 0, vy: 0, size: 1 + Math.random() * 3, life: Math.random() * 250, splash: 0, depth: Math.random() };
         }
       },
 
@@ -1383,25 +1447,43 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const alpha = 0.3 + Math.sin(particle.life * 0.04) * 0.2;
-          p.noStroke();
-          p.fill(r, g, b, alpha * 255);
-          // Small paper fiber shape
+          const sz = particle.size;
+          /* Flat paper fiber with edge highlight */
           p.push();
           p.translate(particle.x, particle.y);
-          p.rotate(particle.life * 0.02);
-          p.rect(-particle.size * 2, -particle.size * 0.4, particle.size * 4, particle.size * 0.8, 1);
+          p.rotate(particle.rotation || 0);
+          p.noStroke();
+          p.fill(r, g, b, alpha * 255);
+          p.rect(-sz * 2, -sz * 0.35, sz * 4, sz * 0.7, 1);
+          /* Edge highlight — one side bright, one side dark */
+          p.fill(255, 255, 255, alpha * 60);
+          p.rect(-sz * 2, -sz * 0.35, sz * 4, sz * 0.15, 1);
           p.pop();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx + Math.sin(particle.life * 0.03) * 0.5; particle.y += particle.vy; particle.life += 1; }
+          if (reduceMotion) return;
+          /* Air resistance: horizontal drift slows down */
+          particle.vx *= 0.995;
+          particle.x += particle.vx + Math.sin(particle.life * 0.03) * 0.5;
+          particle.y += particle.vy;
+          /* Rotation with tumble */
+          particle.rotation = (particle.rotation || 0) + Math.sin(particle.life * 0.02) * 0.015;
+          particle.life += 1;
+          /* Pointer scatter */
+          applyPointerField(particle, p._pointer, {
+            mode: "scatter", radius: 100, strength: 0.5, idleCutoff: 0.1
+          });
           if (particle.y > p.height + particle.size || particle.life > 200) {
             particle.x = Math.random() * p.width;
             particle.y = -particle.size * 4;
+            particle.vx = (Math.random() - 0.5) * 0.7;
+            particle.vy = 0.3 + Math.random() * 0.5;
+            particle.rotation = Math.random() * Math.PI * 2;
             particle.life = 0;
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 0.7, vy: 0.3 + Math.random() * 0.5, size: 1 + Math.random() * 2, life: Math.random() * 150, splash: 0 };
+          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 0.7, vy: 0.3 + Math.random() * 0.5, size: 1 + Math.random() * 2, life: Math.random() * 150, splash: 0, rotation: Math.random() * Math.PI * 2 };
         }
       },
 
@@ -1456,44 +1538,50 @@
           p.noStroke();
           p.push();
           p.translate(particle.x, particle.y);
+          /* Flip: show front or back */
+          const flip = Math.sin(particle.rotation || 0) > 0 ? 1 : 0.7;
           p.rotate(particle.rotation || 0);
-          // Leaf shape — pointed ellipse with notch
-          p.fill(r, g, b, alpha * 200);
+          /* Leaf shape with notch */
+          p.fill(r * flip, g * flip, b * flip, alpha * 200);
           p.beginShape();
-          p.vertex(0, -sz * 2.5);          // tip
+          p.vertex(0, -sz * 2.5);
           p.bezierVertex(sz * 1.2, -sz * 1.5, sz * 1.5, -sz * 0.3, sz * 0.8, sz * 0.8);
-          p.vertex(sz * 0.15, sz * 1.8);   // notch
+          p.vertex(sz * 0.15, sz * 1.8);
           p.vertex(-sz * 0.15, sz * 1.8);
           p.vertex(-sz * 0.8, sz * 0.8);
           p.bezierVertex(-sz * 1.5, -sz * 0.3, -sz * 1.2, -sz * 1.5, 0, -sz * 2.5);
           p.endShape(p.CLOSE);
-          // Leaf vein
-          p.stroke(r * 0.65, g * 0.65, b * 0.65, alpha * 80);
+          /* Leaf vein */
+          p.stroke(r * 0.5, g * 0.5, b * 0.5, alpha * 60);
           p.strokeWeight(0.4);
           p.line(0, -sz * 2.2, 0, sz * 1.5);
-          // Side veins
-          for (let v = -1; v <= 1; v += 1) {
-            const vy = v * sz * 1.0;
-            p.line(0, vy, sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-            p.line(0, vy, -sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-          }
           p.pop();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            const nx = p.noise(particle.life * 0.008, particle.seed) * 2 - 1;
-            const ny = p.noise(particle.seed + 100, particle.life * 0.006) * 0.6;
-            particle.x += particle.vx + nx * 1.5;
-            particle.y += particle.vy + ny;
-            particle.rotation = (particle.rotation || 0) + nx * 0.04 + Math.sin(particle.life * 0.02) * 0.02;
-            particle.life += 1;
-          }
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("leaves", lvl);
+          /* Flow field wind */
+          const nx = p.noise(particle.life * 0.008, particle.seed) * 2 - 1;
+          const ny = p.noise(particle.seed + 100, particle.life * 0.006) * 0.6;
+          /* Air resistance */
+          particle.vx *= 0.998;
+          particle.x += particle.vx + nx * 1.5 * profile.gustAmp;
+          particle.y += particle.vy + ny;
+          /* Rotation with tumble */
+          particle.rotation = (particle.rotation || 0) + nx * 0.04 + Math.sin(particle.life * 0.02) * 0.02;
+          particle.life += 1;
+          /* Pointer bend or scatter */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 120,
+            strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1
+          });
           if (particle.y > p.height + 20 || particle.x > p.width + 40 || particle.x < -40) {
             particle.x = Math.random() * p.width;
             particle.y = -20 - Math.random() * 40;
             particle.rotation = Math.random() * Math.PI * 2;
             particle.life = 0;
-            particle.depth = 0.3 + Math.random() * 0.7; // depth layer
+            particle.depth = 0.3 + Math.random() * 0.7;
           }
         },
         initParticle(w, h) {
