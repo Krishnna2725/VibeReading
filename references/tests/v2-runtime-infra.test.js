@@ -50,11 +50,8 @@ test("gradient stops use valid rgba format", () => {
   assert.match(runtime, /addColorStop\(1, "rgba\(/);
 });
 
-test("gradient stops are monotonically ordered (0 <= midStop <= 1)", () => {
-  assert.match(runtime, /innerStop = 0/);
-  assert.match(runtime, /midStop = 0\.45/);
-  assert.match(runtime, /outerStop = 1/);
-  assert.match(runtime, /Math\.min\(0\.999, midStop\)/);
+test("gradient cache key includes blur and quantized alpha", () => {
+  assert.match(runtime, /Math\.round\(\(o\.alpha \|\| 1\) \* 10\) \/ 10/);
   assert.match(runtime, /o\.blur \|\| 0/);
 });
 

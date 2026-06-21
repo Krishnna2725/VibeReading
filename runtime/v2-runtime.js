@@ -373,10 +373,12 @@
     const cache = new Map();
     const MAX = 64;
     function makeKey(o) {
+      /* Quantize alpha to 0.1 steps so fade-outs get distinct sprites */
+      const qa = Math.round((o.alpha || 1) * 10) / 10;
       return [
         Math.round(o.radius), (o.color || [255, 255, 255]).join(","),
         o.shape || "r", o.innerStop || 0, o.midStop || 0.45, o.outerStop || 1,
-        o.blur || 0
+        o.blur || 0, qa
       ].join(":");
     }
     function radial(o) {
@@ -1065,6 +1067,8 @@
       fog: {
         count: 8, color: [210, 222, 222], gravity: 0.18, drift: 0.55, mist: true,
         setup(p) {
+          /* Clean up old buffer if rebuilding */
+          if (p._fogBuffer && p._fogBuffer.remove) p._fogBuffer.remove();
           /* Create low-res fog buffer */
           const bw = Math.round(p.width * 0.3);
           const bh = Math.round(p.height * 0.3);
@@ -1984,10 +1988,10 @@
       const effect = VIBE_EFFECTS[kind] || VIBE_EFFECTS.dust;
       let instance = null;
       const clock = createFrameClock();
+      let localCache = null;
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
-        let localCache = null;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2274,6 +2278,7 @@
         let particles = [];
         let reduceMotion = false;
         let currentStep = 0;
+        let time = 0;
         const guideClock = createFrameClock();
         let guideCache = null;
 
@@ -2317,7 +2322,7 @@
           p._pointer = pointer;
           p._cache = guideCache;
           p.clear();
-          var time = p.frameCount * 0.016;
+          time += guideClock.dt;
           currentStep = getStep();
           var stepT = Math.min(1, currentStep / 2); /* 0..1 across 3 steps */
 
@@ -2615,8 +2620,14 @@
       };
       instance = new window.p5(sketch);
       guideArtEngine = {
+        _clock: guideClock,
         setFocus: function () { /* no-op */ },
-        destroy() { if (instance) instance.remove(); instance = null; layer.replaceChildren(); }
+        destroy() {
+          if (guideCache) { guideCache.destroy(); guideCache = null; }
+          if (instance) instance.remove();
+          instance = null;
+          layer.replaceChildren();
+        }
       };
     }
 
@@ -2783,11 +2794,17 @@
       if (document.hidden) {
         /* Pause all active weather engines */
         if (weatherEngine && weatherEngine._clock) weatherEngine._clock.pause();
+        /* Pause guide art engine clock */
+        if (guideArtEngine && guideArtEngine._clock) guideArtEngine._clock.pause();
       } else {
         /* Resume and reset clock to avoid dt spike */
         if (weatherEngine && weatherEngine._clock) {
           weatherEngine._clock.resume();
           weatherEngine._clock.reset();
+        }
+        if (guideArtEngine && guideArtEngine._clock) {
+          guideArtEngine._clock.resume();
+          guideArtEngine._clock.reset();
         }
       }
     });
