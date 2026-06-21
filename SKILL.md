@@ -15,13 +15,21 @@ description: >
 Create a quiet, book-specific reading companion space. It is not a plot guide,
 not a puzzle game, not an ebook reader, and not a generic dashboard.
 
+## Core Principle
+
+- Scaffold guarantees wiring.
+- Runtime provides capabilities.
+- Templates define interaction language.
+- The agent creates the actual interface.
+- Validator protects runtime viability, not design conformity.
+
 ## Output Contract
 
 Every output must include:
 
 - one selected template: `window`, `vinyl`, `instrument`, `route`, or `oracle`;
 - a pre-reading guide that appears again after every page refresh;
-- sound immediately after the user clicks Start: play BGM first, fall back to ambience if BGM fails;
+- sound immediately after the user clicks Start;
 - exactly one instrumental BGM for the whole book;
 - 3 to 6 reading stages derived from the real table of contents or chapter order;
 - visible weather or atmospheric motion, adjustable for the current stage;
@@ -35,10 +43,10 @@ Do not build mobile-first layouts. Optimize for a 16:9 horizontal desktop viewpo
 Browser autoplay rules mean the page cannot play audible sound before user interaction:
 
 ```text
-page load -> guide homepage -> user clicks Start -> BGM starts; if it fails, ambience starts
+page load -> guide homepage -> user clicks Start -> BGM starts; current-stage ambience joins if available; if BGM fails, current-stage ambience still acts as fallback
 ```
 
-The guide must not auto-advance. Start, Continue, Skip, and Enter Reading Space must all be user-clicked.
+The guide must not auto-advance. Start, Continue, Skip, and Enter Reading Space must all be user-clicked. Reader-facing controls should use Chinese labels by default (`开始`, `继续`, `跳过引导`, `进入阅读`); use another language only when the user explicitly requests it or the book experience clearly requires it.
 
 ## Template Selection
 
@@ -59,7 +67,7 @@ Does the reader look, drop the needle, tune a signal, move along a route, or dra
 All templates share:
 
 - sound-enabled pre-reading guide on every refresh;
-- one instrumental BGM plus ambience fallback;
+- one instrumental BGM plus stage ambience fallback;
 - 3 to 6 reading stages grouped from the TOC/chapter order;
 - weather, sound, stage switching, reading timer, and pomodoro;
 - high-end visual contract: visual archetype, material system, typography, nested architecture, motion choreography;
@@ -111,7 +119,7 @@ label, sourceRange, chapters, readingHint, weather, light, ambience, motion, uiA
 7. Read `visual-design-contract.md` and set a concrete visual system before writing UI.
 8. Read `entry-guide.md` and design the guide as a short book-specific ceremony with sound, typography, focus, p5/light/object feedback, and click-by-click pacing.
 9. Read `space-blueprint.md` and write `space-spec.json`.
-10. Use `scripts/bgm-gen.py start` for new BGM generation. Do not poll the remote API manually and do not skip because it is slow. Each book uses exactly one instrumental BGM track. Include `is_instrumental: true` and a no-vocals constraint in the prompt. Do not mark BGM as `skipped` — final states are `generated`, `reused`, or `failed`. If BGM fails, play ambience after Start. Reuse requires a non-empty `reused_from` field.
+10. Use `scripts/bgm-gen.py start --prompt "..."` for new BGM generation. Do not poll the remote API manually and do not skip because it is slow. Each book uses exactly one instrumental BGM track. Include `is_instrumental: true` and a no-vocals constraint in the prompt. Do not mark BGM as `skipped` — final states are `generated`, `reused`, or `failed`. Reuse requires a non-empty `reused_from` field.
 11. Select required ambience from `audio-manifest.json`.
 12. Read `technical-contract.md`.
 13. Run scaffold:
@@ -145,18 +153,36 @@ output/YYYY-MM-DD-BookTitle-purpose/
 Keep HTML, CSS, and JS separate. Copy and link the shared runtime; do not inline it and do not load it twice.
 Define page configuration in `app.js`. Do not depend on `fetch()` for local metadata.
 
-Prompt generation (image, BGM) is a **process step**, not a deliverable. Do not save prompt text files in the output. The `bgm-meta.json` tracks BGM status; image assets are declared in `space-spec.json`.
+Prompt generation (image, BGM) is a **process step**, not a required deliverable. The official scripts do not depend on saved prompt files, and validation ignores optional prompt metadata.
 
-## Audio-Weather Coupling
+## Audio Contract
 
-The following ambience-to-weather pairings are mandatory. All other combinations have no requirement.
+Use this schema:
 
-- Rain audio (`drizzle`, `moderate-rain`, `rain-on-the-window`, `thunder-freight`) → `rain` or `storm-rain` visual
-- Fireplace audio (`fireplace-crackling`) → `fire` or `embers` visual
-- Wind audio (`soft-wind`, `distant-breeze`, `forest-wind-with-birds`, `windstorm`) → `wind` visual
-- Water audio (`lake-wavelet`, `sea-and-seagull-wave`, `mountain-stream`) → `ripple` or `water` visual
+```js
+audio: {
+  bgmFile: "./assets/audio/bgm.mp3",
+  ambienceFiles: {
+    "drizzle": "./assets/audio/drizzle.mp3",
+    "library-room": "./assets/audio/library-room.mp3"
+  }
+}
 
-See `references/effects-recipes.md` for the full allowlist and `references/audio-manifest.json` for the `visualWeather` / `visualRequired` fields.
+stage: {
+  ambience: "drizzle"
+}
+```
+
+Rules:
+
+- `bgmFile` is the single whole-book loop.
+- `stage.ambience` references at most one key in `audio.ambienceFiles`.
+- Prefer IDs from `audio-manifest.json` as ambience keys so tooling can provide non-blocking weather guidance.
+- At any moment, only the current stage ambience may be active.
+- After Start, BGM and current-stage ambience may coexist.
+- If BGM fails, current-stage ambience still acts as fallback.
+- Do not traverse the ambience library and play every file.
+- Audio-weather mismatches may produce validator warnings, but never fail delivery.
 
 ## Stage Rules
 
@@ -180,25 +206,21 @@ If a scene needs text, show at most one short line after stage change, then fade
 Each template must embed these controls in its own visual language:
 
 - replay guide;
-- current-stage weather strength: off / low / medium;
+- current-stage weather strength: off / medium / high, defaulting to medium;
 - sound play/pause/volume;
 - 3 to 6 stage switcher;
 - reading timer: pause / resume / reset;
 - 25-minute pomodoro.
 
-The **Window** template uses a预制 (prebuilt) companion panel injected by the runtime:
-bottom-center, `max-width: min(74vw, 640px)`, frosted glass, four-layer structure
-(stage selector → stage info → controls row → note area).
-Other templates define their own companion visibility: some embed controls into the device,
-others use a collapsible entry point. Follow the selected template's companion control spec.
-Never generate the old generic bottom-right "Reading Companion" card.
+Window no longer receives a runtime-injected prebuilt panel. The scaffold/runtime
+only guarantee wiring; the template author creates the actual interface.
 
 ## Template UI Language
 
 Each template has a distinct design language for controls. Do not mix languages across templates.
 
 - **vinyl / instrument**: Use skeuomorphic controls — rotary knobs for continuous values (volume, tuning, weather intensity), toggle switches or mechanical buttons for discrete states (sound on/off, timer mode), LCD or seven-segment for timer, groove marks / channel buttons / liner tabs for stage switching. Do not label controls with raw text like "mute", "volume", "start" on the control surface.
-- **window**: Use frosted glass and modern UI — glass-edge tabs, condensation marks, paper slips as control entry points. The design language is transparent, layered, and ambient. One fixed component style can be reused for all window pages.
+- **window**: Use frosted glass and modern UI — glass-edge tabs, condensation marks, paper slips as control entry points. The design language is transparent, layered, and ambient.
 - **route**: Use paper and travel textures — ticket stubs, stamps, signposts, map legends, compass plates. The design language is worn, folded, inked, and stamped.
 - **oracle**: Use card and cloth textures — card faces, linen cloth, candle glow, ink wash. The design language is ritual, slow, and symbolic.
 
@@ -211,11 +233,11 @@ Before writing code, make one decision for each layer:
 ```text
 Background     main visual and safe composition area
 Atmosphere     weather, particles, light, breath, texture, lines, depth
-Scrim          fixed light dark overlay (rgba(4,8,10,0.16)) for image-led templates
+Scrim          template-owned contrast treatment when the composition needs it
 Spatial Object selected template's main object
 Entry Guide    text hierarchy, focus, p5/light/object feedback
 Companion UI   template-defined companion entry and controls
-Audio          BGM, ambience, fades, fallback behavior
+Audio          BGM, stage ambience, fades, fallback behavior
 App State      how stage, sound, timer, guide, and weather affect the scene
 ```
 
@@ -242,7 +264,7 @@ Every page must be authored fresh for the current book.
 
 ## Visual Assets
 
-- `window`: 1–4 generated 16:9 scene images (1 base + up to 3 stage variants). Declare all images in `space-spec.json` under `assets.images[]`. The base image must show a complete window reading space: window plus outside view at least 70% of frame; visible outside view at least 55%; indoor furniture at most 30%.
+- `window`: before generation, explicitly choose either one base image or one base image plus up to three image-to-image stage variants. Declare all images in `space-spec.json` under `assets.images[]`. The final prompt sent to the image tool must be no more than 400 Unicode characters. The base image must show a complete window reading space: window plus outside view at least 70% of frame; visible outside view at least 55%; indoor furniture at most 30%.
 - `vinyl`: 1 generated image (cover/sleeve or atmospheric). Declare in `assets.images[]`.
 - `route`: 1 generated route/travel image. Declare in `assets.images[]`.
 - `instrument` and `oracle`: normally no image generation. Build with DOM/CSS/SVG/p5. Do not create placeholder image files.

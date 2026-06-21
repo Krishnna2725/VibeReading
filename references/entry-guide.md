@@ -15,6 +15,11 @@ The guide usually does four things without labeling them:
 
 The homepage must provide one clear, poetic Start action that fits the book.
 
+Visible guide controls should use Chinese by default: `开始`, `继续`,
+`跳过引导`, `进入阅读`. Use English or another language only when the user
+explicitly requests it or the book-specific art direction clearly depends on
+that language. Technical `data-vr-*` hooks remain language-neutral.
+
 After the user clicks Start:
 
 1. immediately try `./assets/audio/bgm.mp3`;

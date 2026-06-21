@@ -7,22 +7,30 @@ space-spec.json, bgm-meta.json, and local assets.
 
 Cross-platform note: on Windows the ``python3`` command may not exist.
 Invoke via ``python scripts/scaffold-output.py`` (or ``python3`` on
-Unix/macOS) — both work.
+Unix/macOS); both work.
 """
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-APP_TEMPLATE = """/* [SCAFFOLD — replace with book-specific app.js before delivery] */
+APP_TEMPLATE = """/* [SCAFFOLD - replace with book-specific app.js before delivery] */
+/* Required capability hooks may be authored in index.html or created here:
+   data-vr-guide-start, data-vr-stage, data-vr-sound-toggle,
+   data-vr-timer-toggle, data-vr-timer-mode.
+   Their visual form belongs to the selected template. */
 window.VIBE_READING_SPEC = {
   book: { title: "Untitled", author: "" },
-  template: { primary: "window", reason: "" },
-  entryGuide: { durationSec: 20, steps: [], soundRequiredAfterStart: true },
-  audio: { bgmFile: "./assets/audio/bgm.mp3", ambienceFiles: [] },
-  weather: { defaultLevel: "low" },
+  template: { primary: "", reason: "" },
+  entryGuide: { durationSec: 20, steps: [], soundRequiredAfterStart: true, motion: "" },
+  audio: {
+    bgmFile: "./assets/audio/bgm.mp3",
+    ambienceFiles: {}
+  },
+  weather: { defaultLevel: "medium" },
   assets: { images: [] },
   stages: []
 };
@@ -34,45 +42,56 @@ window.addEventListener("vibereading:stage", (event) => {
 
 STYLE_TEMPLATE = """* { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+.vr-shell { width: 100%; height: 100%; }
 .vr-scene { position: fixed; inset: 0; aspect-ratio: 16 / 9; overflow: hidden; }
+.vr-scene-slot, .vr-companion-root { position: relative; z-index: 5; }
 .vr-scene-image { width: 100%; height: 100%; object-fit: cover; }
 .vr-weather-layer { position: absolute; inset: 0; pointer-events: none; }
 """
 
-SPACE_SPEC_TEMPLATE = """{
-  "book": { "title": "Untitled", "author": "" },
-  "template": { "primary": "window", "reason": "" },
-  "layout": {
-    "aspectRatio": "16:9",
-    "scrim": "fixed-light",
-    "companionPanel": "window-bottom-center"
-  },
-  "assets": {
-    "images": []
-  },
-  "entryGuide": {
-    "durationSec": 20,
-    "soundRequiredAfterStart": true,
-    "motion": "window-fog-clear",
-    "steps": []
-  },
-  "audio": {
-    "bgmFile": "./assets/audio/bgm.mp3",
-    "ambienceFiles": [],
-    "isInstrumental": true
-  },
-  "weather": { "defaultLevel": "low" },
-  "stages": []
+SPACE_SPEC_TEMPLATE = {
+    "book": {"title": "Untitled", "author": ""},
+    "template": {"primary": "", "reason": ""},
+    "layout": {
+        "aspectRatio": "16:9",
+    },
+    "assets": {
+        "images": [],
+    },
+    "audio": {
+        "bgmFile": "./assets/audio/bgm.mp3",
+        "ambienceFiles": {},
+        "isInstrumental": True,
+    },
+    "weather": {"defaultLevel": "medium"},
+    "stages": [],
+    "companion": {
+        "entry": "",
+        "behavior": "",
+        "controls": [],
+    },
+    "effects": {
+        "weatherKinds": [],
+        "guideMotion": "",
+    },
+    "entryGuide": {
+        "durationSec": 20,
+        "soundRequiredAfterStart": True,
+        "motion": "",
+        "steps": [],
+    },
 }
-"""
 
-BGM_META_TEMPLATE = """{
-  "status": "failed",
-  "is_instrumental": true,
-  "file": "./assets/audio/bgm.mp3",
-  "fallback": []
+BGM_META_TEMPLATE = {
+    "status": "failed",
+    "is_instrumental": True,
+    "file": "./assets/audio/bgm.mp3",
+    "reason": "",
 }
-"""
+
+
+def write_json(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
 def main():
@@ -97,8 +116,8 @@ def main():
 
     (output / "app.js").write_text(APP_TEMPLATE, encoding="utf-8")
     (output / "style.css").write_text(STYLE_TEMPLATE, encoding="utf-8")
-    (output / "space-spec.json").write_text(SPACE_SPEC_TEMPLATE, encoding="utf-8")
-    (output / "bgm-meta.json").write_text(BGM_META_TEMPLATE, encoding="utf-8")
+    write_json(output / "space-spec.json", SPACE_SPEC_TEMPLATE)
+    write_json(output / "bgm-meta.json", BGM_META_TEMPLATE)
 
     print(f"[READY] {output}")
 

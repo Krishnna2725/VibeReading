@@ -90,7 +90,7 @@ Weather is a spatial layer, not a checkbox.
 - Each stage should try to have a distinct weather/atmosphere profile.
 - Weather may be rain, fog, snow, dust, scanlines, signal noise, heat shimmer, water ripple, star drift, paper ash, or wind.
 - Controls adjust the current stage's weather strength.
-- The visual effect must be visible at low and medium levels.
+- The visual effect must be clearly visible at medium and high levels without obscuring reading controls.
 
 ## Final Taste Check
 

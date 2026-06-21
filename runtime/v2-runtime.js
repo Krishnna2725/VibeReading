@@ -17,6 +17,222 @@
     "oracle-card-reveal"
   ];
 
+  function normalizeWeatherLevel(level) {
+    if (level === "off") return "off";
+    if (level === "high") return "high";
+    return "medium";
+  }
+
+  function createAudioController(options) {
+    const bgmAudio = options.bgmAudio || null;
+    const ambienceFiles = options.ambienceFiles && typeof options.ambienceFiles === "object"
+      ? options.ambienceFiles
+      : {};
+    const createAudio = options.createAudio || ((file) => new Audio(file));
+    const wait = options.wait || ((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)));
+    const ambienceAudios = new Map();
+    let currentAmbienceKey = "";
+    let currentAmbienceAudio = null;
+    let bgmStarted = false;
+    let bgmVolume = options.initialBgmVolume ?? 0.45;
+    let ambienceVolume = options.initialAmbienceVolume ?? 0.32;
+    let soundEnabled = options.initialSoundEnabled ?? true;
+    let transitionId = 0;
+
+    function getAmbienceAudio(key) {
+      const ambienceKey = String(key || "").trim();
+      if (!ambienceKey) return null;
+      const file = ambienceFiles[ambienceKey];
+      if (!file) return null;
+      if (!ambienceAudios.has(ambienceKey)) {
+        const audio = createAudio(file);
+        audio.loop = true;
+        audio.preload = "auto";
+        ambienceAudios.set(ambienceKey, audio);
+      }
+      return ambienceAudios.get(ambienceKey);
+    }
+
+    function markSoundSource(source) {
+      options.onSoundSourceChange?.(source);
+    }
+
+    function cleanupNonTarget(targetAudio) {
+      ambienceAudios.forEach((audio) => {
+        if (audio === targetAudio) return;
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = 0;
+      });
+    }
+
+    async function safePlay(audio) {
+      try {
+        await audio.play();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function fadeTo(audio, toVolume, durationMs, token) {
+      if (!audio) return false;
+      const fromVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+      const steps = Math.max(1, Math.round(durationMs / 50));
+      for (let step = 1; step <= steps; step += 1) {
+        if (token !== transitionId) return false;
+        const progress = step / steps;
+        audio.volume = fromVolume + ((toVolume - fromVolume) * progress);
+        await wait(durationMs / steps);
+      }
+      if (token === transitionId) audio.volume = toVolume;
+      return token === transitionId;
+    }
+
+    async function playBgm() {
+      if (!bgmAudio) return false;
+      bgmAudio.loop = true;
+      bgmAudio.volume = bgmVolume;
+      if (!bgmAudio.paused && bgmStarted) return true;
+      const played = await safePlay(bgmAudio);
+      if (played) bgmStarted = true;
+      return played;
+    }
+
+    async function switchStageAmbience(nextKey) {
+      const targetKey = String(nextKey || "").trim();
+      const token = ++transitionId;
+      const fadeDurationMs = 2000;
+      const nextAudio = targetKey ? getAmbienceAudio(targetKey) : null;
+      const previousAudio = currentAmbienceAudio;
+      currentAmbienceKey = targetKey;
+      currentAmbienceAudio = nextAudio;
+
+      if (!soundEnabled) {
+        cleanupNonTarget(nextAudio);
+        if (nextAudio && nextAudio !== previousAudio) {
+          nextAudio.pause();
+          nextAudio.currentTime = 0;
+          nextAudio.volume = 0;
+        }
+        return false;
+      }
+
+      if (nextAudio) {
+        nextAudio.loop = true;
+        if (nextAudio !== previousAudio) {
+          nextAudio.currentTime = 0;
+          nextAudio.volume = 0;
+        }
+        if (nextAudio.paused) {
+          const played = await safePlay(nextAudio);
+          if (!played) {
+            cleanupNonTarget(null);
+            currentAmbienceAudio = null;
+            if (bgmAudio && !bgmAudio.paused) {
+              markSoundSource("bgm");
+              return true;
+            }
+            markSoundSource("unavailable");
+            options.onSoundUnavailable?.();
+            return false;
+          }
+        }
+      }
+
+      const fadingAudios = Array.from(ambienceAudios.values()).filter((audio) => audio !== nextAudio && (!audio.paused || audio.volume > 0));
+      if (!nextAudio) {
+        await Promise.all(fadingAudios.map((audio) => fadeTo(audio, 0, fadeDurationMs, token)));
+        if (token !== transitionId) return false;
+        cleanupNonTarget(null);
+        currentAmbienceAudio = null;
+        if (bgmAudio && !bgmAudio.paused) {
+          markSoundSource("bgm");
+          return true;
+        }
+        markSoundSource("unavailable");
+        options.onSoundUnavailable?.();
+        return false;
+      }
+
+      const fadeInDuration = nextAudio === previousAudio ? 400 : fadeDurationMs;
+      const fadeResults = await Promise.all([
+        ...fadingAudios.map((audio) => fadeTo(audio, 0, fadeDurationMs, token)),
+        fadeTo(nextAudio, ambienceVolume, fadeInDuration, token),
+      ]);
+      if (token !== transitionId || fadeResults.some((completed) => !completed)) return false;
+
+      cleanupNonTarget(nextAudio);
+      markSoundSource(bgmAudio && !bgmAudio.paused ? "bgm+ambience" : "ambience");
+      return true;
+    }
+
+    async function beginSound(getCurrentStageAmbience) {
+      if (!soundEnabled) return false;
+      const bgmReady = await playBgm();
+      const ambienceReady = await switchStageAmbience(getCurrentStageAmbience?.() || currentAmbienceKey);
+      if (bgmReady || ambienceReady) {
+        if (bgmReady && !currentAmbienceAudio) markSoundSource("bgm");
+        return true;
+      }
+      markSoundSource("unavailable");
+      options.onSoundUnavailable?.();
+      return false;
+    }
+
+    function pauseSound() {
+      transitionId += 1;
+      if (bgmAudio) bgmAudio.pause();
+      if (currentAmbienceAudio) currentAmbienceAudio.pause();
+      cleanupNonTarget(currentAmbienceAudio);
+    }
+
+    async function setSoundEnabled(enabled, getCurrentStageAmbience) {
+      soundEnabled = enabled;
+      if (enabled) return beginSound(getCurrentStageAmbience);
+      pauseSound();
+      return false;
+    }
+
+    function setBgmVolume(volume) {
+      bgmVolume = volume;
+      if (bgmAudio && !bgmAudio.paused) bgmAudio.volume = volume;
+      options.onBgmVolumeChange?.(volume);
+    }
+
+    function setAmbienceVolume(volume) {
+      ambienceVolume = volume;
+      if (currentAmbienceAudio && !currentAmbienceAudio.paused) currentAmbienceAudio.volume = volume;
+      options.onAmbienceVolumeChange?.(volume);
+    }
+
+    function stopAll() {
+      transitionId += 1;
+      if (bgmAudio) bgmAudio.pause();
+      ambienceAudios.forEach((audio) => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = 0;
+      });
+    }
+
+    return {
+      get currentAmbienceKey() { return currentAmbienceKey; },
+      get currentAmbienceAudio() { return currentAmbienceAudio; },
+      get bgmStarted() { return bgmStarted; },
+      get soundEnabled() { return soundEnabled; },
+      get ambienceAudios() { return ambienceAudios; },
+      setBgmVolume,
+      setAmbienceVolume,
+      playBgm,
+      switchStageAmbience,
+      beginSound,
+      pauseSound,
+      setSoundEnabled,
+      stopAll,
+    };
+  }
+
   function init() {
     const spec = window.VIBE_READING_SPEC;
     if (!spec) {
@@ -31,23 +247,39 @@
 
     /* ── Audio state (separate BGM and ambience volumes) ── */
     const bgmAudio = spec.audio?.bgmFile ? new Audio(spec.audio.bgmFile) : null;
-    const ambienceTracks = (spec.audio?.ambienceFiles || []).map((file) => new Audio(file));
-    let activeAudio = null;
-    let activeAudioSource = null;
-    let bgmVolume = 0.45;
-    let ambienceVolume = 0.32;
-    let weatherLevel = spec.weather?.defaultLevel || "low";
+    const audioController = createAudioController({
+      bgmAudio,
+      ambienceFiles: spec.audio?.ambienceFiles,
+      initialBgmVolume: 0.45,
+      initialAmbienceVolume: 0.32,
+      initialSoundEnabled: true,
+      onSoundSourceChange(source) {
+        root.dataset.vrSoundSource = source;
+      },
+      onBgmVolumeChange(volume) {
+        root.dataset.vrBgmVolume = String(volume);
+        window.dispatchEvent(new CustomEvent("vibereading:bgm-volume", { detail: { volume } }));
+      },
+      onAmbienceVolumeChange(volume) {
+        root.dataset.vrAmbienceVolume = String(volume);
+        window.dispatchEvent(new CustomEvent("vibereading:ambience-volume", { detail: { volume } }));
+      },
+      onSoundUnavailable() {
+        window.dispatchEvent(new CustomEvent("vibereading:sound-unavailable"));
+      }
+    });
+    let weatherLevel = normalizeWeatherLevel(spec.weather?.defaultLevel);
 
     /* ── Guide ── */
     const fallbackGuideSteps = [
-      { id: "settle", text: "Don't rush to turn the page. Let the sound and weather arrive first.", emphasis: "Breathe in slowly, pause." },
-      { id: "orient", text: "This is your posture for entering the book — no plot hints, no answers.", emphasis: "Set aside judgment for now." },
-      { id: "begin", text: "When the scene settles, begin reading from the current chapter.", emphasis: "Open the controls when you need them." }
+      { id: "settle", text: "先别急着翻页，让声音和天气慢慢抵达。", emphasis: "缓缓吸气，停留片刻。" },
+      { id: "orient", text: "这里不提供答案，只陪你进入这本书。", emphasis: "暂时放下判断。" },
+      { id: "begin", text: "当眼前安静下来，就从此刻开始阅读。", emphasis: "需要时，再打开陪伴控件。" }
     ];
     const guideSteps = spec.entryGuide?.steps?.length ? spec.entryGuide.steps : fallbackGuideSteps;
     const stages = spec.stages || [];
-    const uiLanguage = spec.bookDirection?.uiLanguage || spec.book?.uiLanguage || "English";
-    const isChinese = /^zh/i.test(uiLanguage);
+    const uiLanguage = spec.bookDirection?.uiLanguage || spec.book?.uiLanguage || "zh-CN";
+    const isChinese = /^(zh|chinese|中文)/i.test(uiLanguage);
     const bookTitle = $("[data-vr-book-title]");
     if (bookTitle) bookTitle.textContent = spec.book?.title || (isChinese ? "开始阅读" : "Start Reading");
     root.dataset.vrTemplate = templateId;
@@ -67,7 +299,6 @@
     let guideArtEngine = null;
     let activeStageIndex = 0;
     const stageWeatherLevels = new Map();
-    let soundEnabled = true;
 
     /* ── Helpers ── */
     function escapeHtml(value) {
@@ -123,7 +354,20 @@
     function stageDefaultWeatherLevel(stage) {
       const w = stage?.weather;
       if (w && typeof w === "object" && w.defaultLevel) return w.defaultLevel;
-      return stage?.weatherLevel || spec.weather?.defaultLevel || "low";
+      return normalizeWeatherLevel(stage?.weatherLevel || spec.weather?.defaultLevel);
+    }
+
+    function ensureGuideLayer(attributeName, className) {
+      let node = $(`[${attributeName}]`);
+      if (node) return node;
+      const guide = $("[data-vr-guide]");
+      if (!guide) return null;
+      node = document.createElement("div");
+      node.setAttribute(attributeName, "");
+      node.className = className;
+      node.setAttribute("aria-hidden", "true");
+      guide.insertBefore(node, guide.firstChild);
+      return node;
     }
 
     /* ──────────────────────────────────────────────────────────
@@ -643,7 +887,7 @@
     function renderEffect({ layer, kind, level, accent, mode, reducedMotion }) {
       if (!layer) return null;
       const effectiveKind = normalizeWeatherKind(kind || "");
-      const effectiveLevel = level || root.dataset.vrWeatherLevel || "low";
+      const effectiveLevel = normalizeWeatherLevel(level || root.dataset.vrWeatherLevel);
       const effectiveReducedMotion = typeof reducedMotion === "boolean"
         ? reducedMotion
         : window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -678,9 +922,10 @@
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const lvl = root.dataset.vrWeatherLevel || "low";
-        const mult = lvl === "medium" ? 1 : lvl === "off" ? 0 : 0.48;
-        const count = reduceMotion ? Math.ceil(effect.count * 0.18) : Math.ceil(effect.count * mult);
+        const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+        const mult = lvl === "off" ? 0 : lvl === "high" ? 1.55 : 1;
+        const reducedMult = lvl === "off" ? 0 : lvl === "high" ? 0.25 : 0.18;
+        const count = reduceMotion ? Math.ceil(effect.count * reducedMult) : Math.ceil(effect.count * mult);
         particles = Array.from({ length: count }, () => effect.initParticle(width, height));
       }
 
@@ -830,9 +1075,10 @@
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          const lvl = root.dataset.vrWeatherLevel || "low";
-          const mult = lvl === "medium" ? 1 : lvl === "off" ? 0 : 0.48;
-          const count = reduceMotion ? Math.ceil(effect.count * 0.18) : Math.ceil(effect.count * mult);
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const mult = lvl === "off" ? 0 : lvl === "high" ? 1.55 : 1;
+          const reducedMult = lvl === "off" ? 0 : lvl === "high" ? 0.25 : 0.18;
+          const count = reduceMotion ? Math.ceil(effect.count * reducedMult) : Math.ceil(effect.count * mult);
           particles = Array.from({ length: count }, () => effect.initParticle(p.width, p.height));
         }
 
@@ -912,15 +1158,15 @@
     }
 
     function setWeather(level, options = {}) {
-      weatherLevel = level;
-      root.dataset.vrWeatherLevel = level;
+      weatherLevel = normalizeWeatherLevel(level);
+      root.dataset.vrWeatherLevel = weatherLevel;
       const stage = stages[activeStageIndex];
       if (options.persist !== false && stage?.id) stageWeatherLevels.set(stage.id, level);
       $$("[data-vr-weather-level]").forEach((btn) => {
-        btn.setAttribute("aria-pressed", String(btn.dataset.vrWeatherLevel === level));
+        btn.setAttribute("aria-pressed", String(normalizeWeatherLevel(btn.dataset.vrWeatherLevel) === weatherLevel));
       });
       if (weatherEngine?.updateLevel) weatherEngine.updateLevel();
-      window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level, stage, index: activeStageIndex } }));
+      window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level: weatherLevel, stage, index: activeStageIndex } }));
     }
 
     /* ── Pointer state (mouse illumination) ── */
@@ -932,73 +1178,34 @@
 
     /* ── Sound system — sequential BGM-first fallback ── */
     function setBgmVolume(vol) {
-      bgmVolume = vol;
-      if (bgmAudio && activeAudioSource === "bgm") bgmAudio.volume = vol;
-      root.dataset.vrBgmVolume = String(vol);
-      window.dispatchEvent(new CustomEvent("vibereading:bgm-volume", { detail: { volume: vol } }));
+      audioController.setBgmVolume(vol);
     }
 
     function setAmbienceVolume(vol) {
-      ambienceVolume = vol;
-      ambienceTracks.forEach((a) => { if (!a.paused) a.volume = vol; });
-      root.dataset.vrAmbienceVolume = String(vol);
-      window.dispatchEvent(new CustomEvent("vibereading:ambience-volume", { detail: { volume: vol } }));
+      audioController.setAmbienceVolume(vol);
+    }
+
+    async function syncStageAmbience() {
+      const stage = stages[activeStageIndex];
+      root.dataset.vrAmbience = stage?.ambience || "";
+      return audioController.switchStageAmbience(stage?.ambience || "");
     }
 
     async function beginSound() {
-      if (!soundEnabled) return false;
-      if (activeAudio && !activeAudio.paused) return true;
-
-      let anyPlayed = false;
-
-      // 1. Try BGM
-      if (bgmAudio) {
-        bgmAudio.loop = true;
-        bgmAudio.volume = bgmVolume;
-        try {
-          await bgmAudio.play();
-          activeAudio = bgmAudio;
-          activeAudioSource = "bgm";
-          root.dataset.vrSoundSource = "bgm";
-          anyPlayed = true;
-        } catch (_) {
-          // BGM failed — continue to ambience
-        }
-      }
-
-      // 2. Play ambience tracks concurrently with BGM
-      for (const audio of ambienceTracks) {
-        audio.loop = true;
-        audio.volume = ambienceVolume;
-        try {
-          await audio.play();
-          anyPlayed = true;
-        } catch (_) {
-          // This track failed — try next
-        }
-      }
-
-      if (anyPlayed) return true;
-
-      // 3. Nothing worked
-      root.dataset.vrSoundSource = "unavailable";
-      window.dispatchEvent(new CustomEvent("vibereading:sound-unavailable"));
-      return false;
+      return audioController.beginSound(() => stages[activeStageIndex]?.ambience || "");
     }
 
     function pauseSound() {
-      [bgmAudio, ...ambienceTracks].filter(Boolean).forEach((a) => a.pause());
+      audioController.pauseSound();
     }
 
-    function setSoundEnabled(enabled) {
-      soundEnabled = enabled;
+    async function setSoundEnabled(enabled) {
       root.dataset.vrSound = enabled ? "on" : "off";
       const toggle = $("[data-vr-sound-toggle]");
       if (toggle) toggle.textContent = enabled
         ? (isChinese ? "静音" : "Mute")
         : (isChinese ? "取消静音" : "Unmute");
-      if (enabled) beginSound();
-      else pauseSound();
+      await audioController.setSoundEnabled(enabled, () => stages[activeStageIndex]?.ambience || "");
     }
 
     /* ── Timer ── */
@@ -1054,6 +1261,7 @@
       const safeIndex = Math.max(0, Math.min(index, stages.length - 1));
       const stage = stages[safeIndex];
       if (!stage) return;
+      const stageChanged = activeStageIndex !== safeIndex;
       activeStageIndex = safeIndex;
       root.dataset.vrStage = stage.id;
       const currentStage = $("[data-vr-current-stage]");
@@ -1067,6 +1275,7 @@
       });
       renderWeather(stageWeatherDescription(stage) || spec.weather?.kind || "");
       setWeather(stageWeatherLevels.get(stage.id) || stageDefaultWeatherLevel(stage), { persist: false });
+      if (stageChanged || stage?.ambience || audioController.currentAmbienceKey) syncStageAmbience();
       window.dispatchEvent(new CustomEvent("vibereading:stage", { detail: { stage, index: safeIndex } }));
     }
 
@@ -1104,6 +1313,7 @@
     }
 
     function setGuideFocus(step, index) {
+      ensureGuideLayer("data-vr-guide-focus", "vr-guide-focus");
       const focus = guideFocusForStep(step, index);
       root.style.setProperty("--vr-guide-focus-x", focus.x);
       root.style.setProperty("--vr-guide-focus-y", focus.y);
@@ -1119,7 +1329,7 @@
 
     /* ── Guide art (full-screen atmospheric preset — no crosshair, no center circle) ── */
     function createGuideArt() {
-      const layer = $("[data-vr-guide-art]");
+      const layer = ensureGuideLayer("data-vr-guide-art", "vr-guide-art");
       if (!layer || guideArtEngine) return;
       if (!window.p5) { layer.dataset.vrGuideArtEngine = "css"; return; }
       layer.dataset.vrGuideArtEngine = "p5";
@@ -1356,7 +1566,7 @@
         "[data-vr-guide-start], [data-vr-guide-next], [data-vr-guide-skip], [data-vr-guide-replay], " +
         "[data-vr-sound-toggle], [data-vr-weather-level], [data-vr-stage], " +
         "[data-vr-timer-toggle], [data-vr-timer-reset], [data-vr-timer-mode], " +
-        "[data-vr-bgm-volume], [data-vr-ambience-volume], [data-vr-note-save], [data-vr-panel-toggle]"
+        "[data-vr-bgm-volume], [data-vr-ambience-volume], [data-vr-note-save]"
       );
       if (!target) return;
 
@@ -1371,11 +1581,10 @@
       } else if (target.matches("[data-vr-guide-replay]")) {
         stopTimer();
         resetTimerForMode();
-        soundEnabled = true;
         await beginSound();
         runGuide();
       } else if (target.matches("[data-vr-sound-toggle]")) {
-        setSoundEnabled(!soundEnabled);
+        await setSoundEnabled(!audioController.soundEnabled);
       } else if (target.matches("[data-vr-weather-level]")) {
         setWeather(target.dataset.vrWeatherLevel);
       } else if (target.matches("[data-vr-stage]")) {
@@ -1384,12 +1593,6 @@
         if (timerRunning) stopTimer(); else startTimer();
       } else if (target.matches("[data-vr-timer-reset]")) {
         resetTimer();
-      } else if (target.matches("[data-vr-panel-toggle]")) {
-        const panel = $("[data-vr-companion-panel]");
-        if (panel) {
-          const expanded = panel.dataset.vrPanelExpanded === "true";
-          panel.dataset.vrPanelExpanded = String(!expanded);
-        }
       } else if (target.matches("[data-vr-note-save]")) {
         saveNote();
       }
@@ -1411,7 +1614,7 @@
     });
 
     window.addEventListener("beforeunload", () => {
-      pauseSound();
+      audioController.stopAll();
       destroyWeatherEngine();
       destroyGuideArt();
     });
@@ -1424,6 +1627,12 @@
     resetTimerForMode();
     setWeather(weatherLevel, { persist: false });
     selectStage(0);
+  }
+
+  if (typeof window !== "undefined") {
+    window.__VIBE_READING_TEST_HOOKS = Object.assign({}, window.__VIBE_READING_TEST_HOOKS, {
+      createAudioController,
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });

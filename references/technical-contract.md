@@ -20,11 +20,11 @@ Core states:
 
 ```text
 guideState    not-started / active / complete
-soundState    playing / paused / bgm-failed-ambience
+soundState    playing / paused / bgm-failed-ambience / bgm+ambience
 stageIndex    0-based current stage
-weatherLevel  off / low / medium
+weatherLevel  off / medium / high
 timerState    reading / paused / pomodoro
-panelState    expanded / collapsed
+panelState    template-defined
 ```
 
 Use runtime events when useful:
@@ -81,9 +81,8 @@ These constraints solve "font too small / UI runs off screen / manual zoom to fi
 
 ### Panel Dimensions
 
-- Window companion panel: `max-width: min(74vw, 640px)`, positioned at bottom center.
-- No panel shall exceed 80vw width.
-- Panel height should not exceed 45vh (leave room for the scene above).
+- No template control block shall exceed 80vw width.
+- Control height should not exceed 45vh unless the template object itself justifies it.
 
 ### Text Overflow
 
@@ -100,7 +99,7 @@ Fixed z-index scale (no z-index wars):
 5-10    scene shell, template affordances
 20-30   micro-spaces, detail chambers
 40      companion-mode overlay
-50      companion panel, modals, stage selector, atmosphere control
+50      template-owned control layers
 70      toast / notification
 100     pre-reading guide overlay
 200     toast (runtime-injected)
@@ -108,21 +107,10 @@ Fixed z-index scale (no z-index wars):
 
 ### Scrim
 
-All image-led templates (window, vinyl, route) must include a fixed light scrim:
-
-```css
-.vr-scene::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: rgba(4, 8, 10, 0.16);
-  pointer-events: none;
-}
-```
-
-This scrim is **fixed** — it is not variable, not adjustable, and not optional.
-It ensures weather particles are visible on bright backgrounds without darkening the scene.
+Image-led templates may add a contrast layer when weather or controls would
+otherwise disappear against the image. Its color, opacity, blend mode, and
+placement belong to the selected template's art direction; the shared runtime
+does not inject a fixed scrim.
 
 ## Controls
 
@@ -130,37 +118,55 @@ Each template must provide accessible HTML controls for:
 
 - Start / Continue / Skip guide;
 - replay guide;
-- sound play/pause and volume (BGM and ambience separately);
+- sound play/pause and volume;
 - stage switching;
-- weather strength for the current stage (off / low / medium);
+- weather strength for the current stage;
 - timer pause/resume/reset;
 - pomodoro mode.
 
+Use Chinese reader-facing button labels by default. The runtime hooks remain in
+English because they are implementation identifiers, not visible copy.
+
 Stage controls are authored by the selected template. The runtime binds existing `[data-vr-stage]` controls.
-The Window template uses a预制 panel with all controls pre-structured.
 
 Keep real controls as accessible HTML, styled to belong to the selected template object.
 
 ## Sound
 
+Use this data contract:
+
+```js
+audio: {
+  bgmFile: "./assets/audio/bgm.mp3",
+  ambienceFiles: {
+    "rain-window": "./assets/audio/rain-window.mp3"
+  }
+}
+
+stage: {
+  ambience: "rain-window"
+}
+```
+
 On Start click:
 
 1. call `audio.play()` for BGM immediately;
-2. if BGM errors, switch to ambience immediately;
-3. keep volume fades smooth;
-4. BGM and ambience have **separate volume sliders** — the runtime holds `bgmVolume` and `ambienceVolume` independently;
-5. keep sound toggle available in the template control.
+2. resolve the current stage ambience from `stage.ambience`;
+3. allow BGM and current ambience to coexist;
+4. if BGM errors, keep current stage ambience as fallback when possible;
+5. keep volume fades smooth;
+6. BGM and ambience have separate volume controls in runtime state;
+7. when switching stages, old ambience fades out and new ambience fades in.
+
+Do not iterate through the full ambience library and play everything.
 
 ## Guide
 
 The guide must be click-stepped, not timed auto-play.
+The shared shell provides only the guide root and neutral overlay layers.
+Guide content hierarchy, text placement, button placement, and visual form are authored by the page itself.
+
 The skip action must enter the reading space and still start sound/fallback.
-
-## 16:9
-
-The first viewport must show the full main object and primary controls at 16:9.
-Use `aspect-ratio: 16 / 9` or equivalent aspect-ratio handling.
-Do not hide essential controls below the fold in a normal 16:9 desktop viewport.
 
 ## Validation
 
@@ -171,4 +177,4 @@ node --check "output/<task-folder>/app.js"
 node references/tests/evaluate-vibereading-output.mjs "output/<task-folder>"
 ```
 
-Use validation failures to fix deterministic issues only. Do not spend time writing aesthetic self-reviews.
+Use validation failures to fix deterministic runtime issues only. Do not turn validation back into a fixed UI DOM audit.

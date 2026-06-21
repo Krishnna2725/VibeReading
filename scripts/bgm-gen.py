@@ -3,7 +3,7 @@
 
 Agents should only use:
 
-  python scripts/bgm-gen.py start --prompt-file output/xxx/prompts/bgm.txt --output-dir output/xxx
+  python scripts/bgm-gen.py start --prompt "..." --output-dir output/xxx
   python scripts/bgm-gen.py status --output-dir output/xxx
 
 `start` returns immediately. A detached worker waits for MiniMax, downloads the
@@ -40,51 +40,57 @@ def paths(output_dir):
     }
 
 
-def pending_meta(prompt):
+def pending_meta():
     return {
         "status": "pending",
         "is_instrumental": True,
         "file": "./assets/audio/bgm.mp3",
-        "prompt": prompt,
         "reason": "Background generation is running. Check later with status. Do not change this to skipped because the API is slow.",
     }
 
 
-def final_meta(status, prompt, reason=""):
-    return {
+def final_meta(status, reason="", reused_from=""):
+    meta = {
         "status": status,
         "is_instrumental": True,
         "file": "./assets/audio/bgm.mp3",
-        "prompt": prompt,
         "reason": reason,
     }
+    if reused_from:
+        meta["reused_from"] = reused_from
+    return meta
 
 
 def read_prompt(args):
-    if args.prompt_file:
-        return Path(args.prompt_file).read_text(encoding="utf-8").strip()
     return (args.prompt or "").strip()
 
 
 def start_job(args):
     prompt = read_prompt(args)
     if not prompt:
-        raise SystemExit("[FAIL] Provide --prompt-file or --prompt")
+        raise SystemExit("[FAIL] Provide --prompt")
 
     target = paths(args.output_dir)
     target["root"].mkdir(parents=True, exist_ok=True)
     target["audio"].parent.mkdir(parents=True, exist_ok=True)
+    started_at = int(time.time())
 
     if target["audio"].exists() and not args.force:
-        write_json(target["meta"], final_meta("generated", prompt, "Target BGM already exists; generation was not repeated."))
+        write_json(target["meta"], final_meta("generated", "Target BGM already exists; generation was not repeated."))
+        write_json(target["job"], {
+            "status": "generated",
+            "startedAt": started_at,
+            "finishedAt": started_at,
+            "outputDir": str(target["root"]),
+        })
         print(f"[READY] {target['audio']}")
         return
 
-    write_json(target["meta"], pending_meta(prompt))
+    write_json(target["meta"], pending_meta())
     write_json(target["job"], {
         "status": "pending",
         "pid": None,
-        "startedAt": int(time.time()),
+        "startedAt": started_at,
         "outputDir": str(target["root"]),
     })
 
@@ -96,6 +102,8 @@ def start_job(args):
         prompt,
         "--output-dir",
         str(target["root"]),
+        "--started-at",
+        str(started_at),
     ]
 
     with target["log"].open("a", encoding="utf-8") as log:
@@ -109,7 +117,7 @@ def start_job(args):
     write_json(target["job"], {
         "status": "running",
         "pid": process.pid,
-        "startedAt": int(time.time()),
+        "startedAt": started_at,
         "outputDir": str(target["root"]),
     })
     print(f"[STARTED] Background BGM job PID={process.pid}")
@@ -173,24 +181,29 @@ def download(url, output):
 def worker(args):
     target = paths(args.output_dir)
     prompt = args.prompt.strip()
+    started_at = int(args.started_at)
     api_key = os.environ.get("MINIMAX_API_KEY", "").strip()
     try:
         if not api_key:
             raise RuntimeError("Environment variable MINIMAX_API_KEY is not set")
         audio_url = run_curl(api_key, prompt)
         download(audio_url, target["audio"])
-        write_json(target["meta"], final_meta("generated", prompt))
+        finished_at = int(time.time())
+        write_json(target["meta"], final_meta("generated"))
         write_json(target["job"], {
             "status": "generated",
-            "finishedAt": int(time.time()),
+            "startedAt": started_at,
+            "finishedAt": finished_at,
             "outputDir": str(target["root"]),
         })
         print(f"[DONE] {target['audio']}", flush=True)
     except Exception as error:
-        write_json(target["meta"], final_meta("failed", prompt, str(error)))
+        finished_at = int(time.time())
+        write_json(target["meta"], final_meta("failed", str(error)))
         write_json(target["job"], {
             "status": "failed",
-            "finishedAt": int(time.time()),
+            "startedAt": started_at,
+            "finishedAt": finished_at,
             "reason": str(error),
             "outputDir": str(target["root"]),
         })
@@ -221,7 +234,6 @@ def build_parser():
 
     start = subparsers.add_parser("start", help="start background generation and return immediately")
     start.add_argument("--prompt")
-    start.add_argument("--prompt-file")
     start.add_argument("--output-dir", required=True)
     start.add_argument("--force", action="store_true")
     start.set_defaults(handler=start_job)
@@ -233,6 +245,7 @@ def build_parser():
     internal = subparsers.add_parser("_worker", help=argparse.SUPPRESS)
     internal.add_argument("--prompt", required=True)
     internal.add_argument("--output-dir", required=True)
+    internal.add_argument("--started-at", required=True)
     internal.set_defaults(handler=worker)
     return parser
 

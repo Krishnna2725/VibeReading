@@ -12,18 +12,16 @@ test("runtime returns to the guide home on every refresh", () => {
   assert.doesNotMatch(runtime, /localStorage|sessionStorage/);
 });
 
-test("runtime plays BGM and ambience concurrently", () => {
-  // Concurrent: try BGM first, then play ambience tracks alongside BGM
-  assert.match(runtime, /await bgmAudio\.play\(\)/);
-  assert.match(runtime, /await audio\.play\(\)/);
-  assert.match(runtime, /activeAudioSource = "bgm"/);
-  // Ambience tracks play concurrently — no early return after BGM
-  assert.match(runtime, /anyPlayed = true/);
-  assert.doesNotMatch(runtime, /activeAudioSource = "bgm";\s*\n\s*return true/);
-  assert.match(runtime, /await beginSound\(\);\s+runGuide\(\)/);
-  assert.match(shell, /data-vr-guide-next/);
-  assert.match(runtime, /advanceGuide/);
-  assert.doesNotMatch(runtime, /window\.setTimeout\(enterReading,\s*total/);
+test("runtime consumes stage ambience through the shared audio contract", () => {
+  assert.match(runtime, /audio\?\.ambienceFiles/);
+  assert.match(runtime, /stage\?\.ambience/);
+  assert.match(runtime, /function switchStageAmbience/);
+  assert.match(runtime, /function syncStageAmbience/);
+  assert.match(runtime, /const fadeDurationMs = 2000/);
+  assert.match(runtime, /Promise\.all\(\[/);
+  assert.match(runtime, /fadeTo\(nextAudio, ambienceVolume/);
+  assert.match(runtime, /bgm\+ambience/);
+  assert.doesNotMatch(runtime, /for \(const audio of ambienceTracks\)/);
 });
 
 test("runtime exposes stage, weather, timer, and pomodoro contracts", () => {
@@ -31,24 +29,35 @@ test("runtime exposes stage, weather, timer, and pomodoro contracts", () => {
   assert.match(runtime, /document\.addEventListener\("click"/);
   assert.match(runtime, /renderWeather/);
   assert.match(runtime, /data-vr-stage/);
-  assert.match(runtime, /data-vr-current-hint/);
   assert.match(runtime, /data-vr-weather-level/);
-  assert.match(runtime, /stageWeatherLevels/);
   assert.match(runtime, /25 \* 60/);
   assert.match(runtime, /vibereading:pomodoro-complete/);
 });
 
-test("runtime includes guide art and does not output a generic companion card", () => {
-  assert.match(runtime, /createGuideArt/);
-  assert.match(shell, /data-vr-guide-art/);
-  assert.match(shell, /data-vr-guide-focus/);
-  assert.match(runtime, /renderGuideText/);
-  assert.match(runtime, /vrGuideSpotlight/);
-  // Old generic companion card patterns must not exist
-  assert.doesNotMatch(shell, /data-vr-companion-toggle/);
-  assert.doesNotMatch(shell, /data-vr-companion-close/);
-  // The old "阅读陪伴" label and old card class must not exist
-  assert.doesNotMatch(shell, /阅读陪伴/);
+test("weather uses off, medium, and high with medium as the default", () => {
+  assert.match(runtime, /function normalizeWeatherLevel/);
+  assert.match(runtime, /level === "high"/);
+  assert.match(runtime, /return "medium"/);
+  assert.match(runtime, /lvl === "high" \? 1\.55 : 1/);
+  assert.doesNotMatch(runtime, /vrWeatherLevel \|\| "low"|defaultLevel \|\| "low"/);
+});
+
+test("runtime defaults reader-facing fallback controls to Chinese", () => {
+  assert.match(runtime, /\|\| "zh-CN"/);
+  assert.match(runtime, /\^\(zh\|chinese\|中文\)/);
+  assert.match(runtime, /"进入阅读"/);
+  assert.match(runtime, /"静音"/);
+});
+
+test("page shell is neutral and keeps only runtime mount points", () => {
+  assert.match(shell, /data-vr-scene/);
+  assert.match(shell, /data-vr-weather/);
+  assert.match(shell, /data-vr-scene-slot/);
+  assert.match(shell, /data-vr-companion-root/);
+  assert.match(shell, /data-vr-guide-root/);
+  assert.doesNotMatch(shell, /data-vr-companion-panel/);
+  assert.doesNotMatch(shell, /data-vr-panel-toggle/);
+  assert.doesNotMatch(shell, /data-vr-note-textarea/);
 });
 
 test("runtime prefers p5 weather and provides Canvas fallback", () => {
@@ -68,7 +77,7 @@ test("runtime supports all 15 weather kinds including leaves and fireflies", () 
   }
 });
 
-test("runtime has separate BGM and ambience volume controls", () => {
+test("runtime keeps separate BGM and ambience volume controls", () => {
   assert.match(runtime, /setBgmVolume/);
   assert.match(runtime, /setAmbienceVolume/);
   assert.match(runtime, /bgmVolume/);
@@ -77,40 +86,8 @@ test("runtime has separate BGM and ambience volume controls", () => {
   assert.match(runtime, /data-vr-ambience-volume/);
 });
 
-test("runtime includes WEATHER_ALLOWLIST", () => {
+test("runtime includes WEATHER_ALLOWLIST and guide motion presets", () => {
   assert.match(runtime, /WEATHER_ALLOWLIST/);
-  assert.match(runtime, /normalizeWeatherKind/);
-});
-
-test("page-shell includes Window companion panel structure", () => {
-  assert.match(shell, /data-vr-companion-panel/);
-  assert.match(shell, /data-vr-panel-expanded/);
-  assert.match(shell, /data-vr-panel-toggle/);
-  assert.match(shell, /vr-stage-selector/);
-  assert.match(shell, /vr-stage-info/);
-  assert.match(shell, /vr-controls-row/);
-  assert.match(shell, /vr-note-area/);
-  assert.match(shell, /data-vr-note-textarea/);
-  assert.match(shell, /data-vr-note-save/);
-  assert.match(shell, /data-vr-bgm-volume/);
-  assert.match(shell, /data-vr-ambience-volume/);
-  assert.match(shell, /data-vr-weather-level="off"/);
-  assert.match(shell, /data-vr-weather-level="low"/);
-  assert.match(shell, /data-vr-weather-level="medium"/);
-});
-
-test("CSS includes fixed light scrim", () => {
-  assert.match(css, /rgba\s*\(\s*4\s*,\s*8\s*,\s*10/);
-  assert.match(css, /\.vr-scene::after/);
-});
-
-test("CSS includes Window companion panel styles", () => {
-  assert.match(css, /data-vr-companion-panel/);
-  assert.match(css, /min\(74vw,\s*640px\)/);
-  assert.match(css, /backdrop-filter/);
-});
-
-test("runtime includes guide motion presets", () => {
   assert.match(runtime, /GUIDE_MOTION_PRESETS/);
   assert.match(runtime, /window-fog-clear/);
   assert.match(runtime, /vinyl-groove-orbit/);
@@ -119,70 +96,16 @@ test("runtime includes guide motion presets", () => {
   assert.match(runtime, /oracle-card-reveal/);
 });
 
-test("runtime includes note export support", () => {
+test("shared CSS keeps neutral roots without a fixed visual skin", () => {
+  assert.match(css, /\.vr-companion-root/);
+  assert.doesNotMatch(css, /data-vr-companion-panel/);
+  assert.doesNotMatch(css, /min\(74vw,\s*640px\)/);
+  assert.doesNotMatch(css, /#050708|rgba\s*\(\s*4\s*,\s*8\s*,\s*10/);
+  assert.doesNotMatch(css, /backdrop-filter|radial-gradient|linear-gradient/);
+});
+
+test("runtime keeps optional note export support without requiring it in shell", () => {
   assert.match(runtime, /saveNote/);
   assert.match(runtime, /VibeReadingNoteShare/);
-});
-
-test("runtime includes showToast helper", () => {
-  assert.match(runtime, /showToast/);
-  assert.match(runtime, /vr-toast/);
-});
-
-test("runtime includes renderEffect unified entry point", () => {
-  assert.match(runtime, /function renderEffect/);
-  assert.match(runtime, /layer.*kind.*level/);
-});
-
-test("runtime tracks pointer position for mouse illumination", () => {
-  assert.match(runtime, /pointerX/);
-  assert.match(runtime, /pointerY/);
-  assert.match(runtime, /mousemove/);
-});
-
-test("runtime effects use noise-based movement", () => {
-  // Check that key effects use p.noise() for continuous movement
-  assert.match(runtime, /p\.noise\(/);
-});
-
-test("runtime guide art has no crosshair or center circle", () => {
-  const guideArtSection = runtime.slice(runtime.indexOf("createGuideArt"), runtime.indexOf("showGuideStep"));
-  assert.doesNotMatch(guideArtSection, /p\.rect\(tx - 150/);
-  assert.doesNotMatch(guideArtSection, /p\.line\(tx, ty - 95/);
-  assert.doesNotMatch(guideArtSection, /p\.circle\(tx, ty, 120/);
-});
-
-test("renderWeather routes through renderEffect", () => {
-  // renderWeather should call renderEffect, not directly createP5Weather
-  const renderWeatherFn = runtime.slice(runtime.indexOf("function renderWeather"), runtime.indexOf("function destroyWeatherEngine"));
-  assert.match(renderWeatherFn, /renderEffect\(/);
-});
-
-test("P5 weather engine includes global mouse illumination glow", () => {
-  const p5Section = runtime.slice(runtime.indexOf("function createP5Weather"), runtime.indexOf("function renderWeather"));
-  assert.match(p5Section, /pointerX/);
-  assert.match(p5Section, /pointerY/);
-  assert.match(p5Section, /p\.circle\(mx, my/);
-});
-
-test("fireflies have flocking neighbor search", () => {
-  const firefliesIdx = runtime.indexOf("fireflies:");
-  const afterFireflies = runtime.slice(firefliesIdx, firefliesIdx + 2500);
-  assert.match(afterFireflies, /nearestDist/);
-  assert.match(afterFireflies, /nearest/);
-  assert.match(afterFireflies, /particle\.vx \+=/);
-});
-
-test("leaves have depth field for parallax", () => {
-  const leavesSection = runtime.slice(runtime.indexOf("leaves:"), runtime.indexOf("fireflies:"));
-  assert.match(leavesSection, /depth/);
-  assert.match(leavesSection, /particle\.depth/);
-});
-
-test("window guide uses noise-based organic curves, not straight lines", () => {
-  const guideSection = runtime.slice(runtime.indexOf("createGuideArt"), runtime.indexOf("showGuideStep"));
-  // Should use p.noise for organic fog clearing
-  assert.match(guideSection, /p\.noise\(/);
-  // Should NOT have the old straight-line pattern
-  assert.doesNotMatch(guideSection, /p\.line\(x \+ offset, 0, x - offset/);
+  assert.doesNotMatch(shell, /data-vr-note-save/);
 });

@@ -36,7 +36,6 @@ If no image is generated, build the route with CSS/SVG/p5.
 
 - Prompt discipline: image prompt is for the image model only. No UI requirements, runtime instructions, or checklist text.
 - Include: `No text, no letters, no numbers, no logo, no watermark, no signage, no labels, no UI, no panels.`
-- Output files: `concept-image.png`, `prompts/image.txt` (only if generating image).
 - Route images should show a path, road, river, or travel landscape without any text or signage.
 
 ## Stage Switching

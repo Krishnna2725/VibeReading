@@ -10,7 +10,7 @@ Agents select weather via `weather.kind` in `space-spec.json` — **do not write
 
 ```js
 // In space-spec.json / app.js:
-{ "weather": { "kind": "rain", "defaultLevel": "low" } }
+{ "weather": { "kind": "rain", "defaultLevel": "medium" } }
 ```
 
 ### Preset Catalog
@@ -46,7 +46,7 @@ renderEffect({ layer, kind, level, accent, mode, reducedMotion })
 Parameters:
 - `layer`: DOM element to mount the effect canvas into
 - `kind`: weather kind string (from allowlist)
-- `level`: "off" / "low" / "medium"
+- `level`: "off" / "medium" / "high"
 - `accent`: stage.uiAccent color
 - `mode`: "weather" | "guide"
 - `reducedMotion`: boolean
@@ -71,7 +71,7 @@ Examples:
 ```json
 {
   "label": "Early Rooms",
-  "weather": { "kind": "fog", "defaultLevel": "low" },
+  "weather": { "kind": "fog", "defaultLevel": "medium" },
   "light": "warm lamp glow with cooler window edges",
   "motion": "slow condensation drift"
 }
@@ -81,8 +81,8 @@ The weather control changes only the current stage strength:
 
 ```text
 off     no particles, keep static light/texture
-low     visible but calm
-medium  stronger motion, still readable
+medium  clearly visible, calm enough for normal reading (default)
+high    denser and more expressive, while controls remain readable
 ```
 
 ## Guide Effects
@@ -109,7 +109,7 @@ Do not write custom p5 guide sketches. Use the preset names.
 
 ## Audio-Weather Coupling
 
-The following ambience-to-weather pairings are **mandatory**. All other ambience and weather combinations have no coupling requirement — use whatever fits the book.
+The following ambience-to-weather pairings are recommended defaults. Known mismatches may produce a non-blocking validator warning; they never fail delivery. All other combinations are left to the book-specific art direction.
 
 | Ambience assets | Required `weather.kind` |
 | --- | --- |
@@ -118,7 +118,7 @@ The following ambience-to-weather pairings are **mandatory**. All other ambience
 | `soft-wind`, `distant-breeze`, `forest-wind-with-birds`, `windstorm` | `wind` |
 | `lake-wavelet`, `sea-and-seagull-wave`, `mountain-stream` | `ripple` or `water` |
 
-This is a strict allowlist: only the pairs above are enforced. Assets not listed here (birds, library, cafe, city apartment, etc.) have no visual requirement.
+Assets not listed here (birds, library, cafe, city apartment, etc.) have no visual recommendation.
 
 ## Implementation Rules
 
@@ -137,4 +137,4 @@ This is a strict allowlist: only the pairs above are enforced. Assets not listed
 - Add depth with parallax speed differences.
 - Use slow movement; avoid arcade effects.
 - Combine particles with CSS gradients, masks, and blend modes.
-- Make low level clearly visible; otherwise the control feels broken.
+- Make medium clearly visible and high meaningfully stronger; otherwise the control feels broken.

@@ -19,7 +19,7 @@ Books whose main experience is landscape contemplation, travel, music memory, or
 
 - **Default: no image generation.** Build the CRT receiver with DOM/CSS/SVG/p5.
 - If the agent determines an image is genuinely needed, follow the standard prompt discipline: no text, no UI, no labels in the image.
-- When no image is generated, do not create `concept-image.png` or `prompts/image.txt`.
+- When no image is generated, do not create placeholder image deliverables.
 
 ## Stable Object Skeleton
 

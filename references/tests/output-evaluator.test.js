@@ -10,9 +10,8 @@ const skillRoot = path.join(__dirname, "../..");
 const evaluator = path.join(__dirname, "evaluate-vibereading-output.mjs");
 const scaffold = path.join(skillRoot, "scripts/scaffold-output.py");
 
-// Create a minimal valid 1x1 PNG
 function makeMinimalPNG() {
-  const sig = Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]);
+  const sig = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
   function crc32(buf) {
     let crc = 0xFFFFFFFF;
     const table = [];
@@ -31,39 +30,92 @@ function makeMinimalPNG() {
     return Buffer.concat([len, tbd, crc]);
   }
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4);
-  ihdr[8] = 8; ihdr[9] = 2;
+  ihdr.writeUInt32BE(1, 0);
+  ihdr.writeUInt32BE(1, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
   const compressed = zlib.deflateSync(Buffer.from([0, 100, 140, 180]));
-  return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', compressed), chunk('IEND', Buffer.alloc(0))]);
+  return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", compressed), chunk("IEND", Buffer.alloc(0))]);
+}
+
+function controlMarkup() {
+  return `
+    <button type="button" data-vr-guide-start>开始</button>
+    <button type="button" data-vr-guide-next hidden>继续</button>
+    <button type="button" data-vr-guide-skip hidden>跳过引导</button>
+    <button type="button" data-vr-guide-replay>重新引导</button>
+    <button type="button" data-vr-sound-toggle>静音</button>
+    <button type="button" data-vr-stage="0">阶段一</button>
+    <button type="button" data-vr-stage="1">阶段二</button>
+    <button type="button" data-vr-stage="2">阶段三</button>
+    <div data-vr-current-stage></div>
+    <div data-vr-current-range></div>
+    <div data-vr-current-hint></div>
+    <button type="button" data-vr-weather-level="off">关闭</button>
+    <button type="button" data-vr-weather-level="medium">中档</button>
+    <button type="button" data-vr-weather-level="high">高档</button>
+    <button type="button" data-vr-timer-toggle>暂停</button>
+    <button type="button" data-vr-timer-reset>重置</button>
+    <select data-vr-timer-mode><option value="elapsed">阅读计时</option><option value="pomodoro">番茄钟</option></select>
+    <input type="range" data-vr-bgm-volume min="0" max="1" step="0.05" value="0.45">
+    <input type="range" data-vr-ambience-volume min="0" max="1" step="0.05" value="0.32">
+  `;
 }
 
 function makeFixture(stageCount) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vibereading-evaluator-"));
   const scaffoldResult = spawnSync("python", [scaffold, "--output-dir", dir], { encoding: "utf8" });
   assert.equal(scaffoldResult.status, 0, scaffoldResult.stdout + scaffoldResult.stderr);
+
+  const ambienceFile = "./assets/audio/rain-window.mp3";
   const stages = Array.from({ length: stageCount }, (_, index) => ({
     id: `stage-${index + 1}`,
     label: `Stage ${index + 1}`,
     sourceRange: `Chapter group ${index + 1}`,
     chapters: [`Chapter ${index + 1}`],
-    weather: "drizzle"
+    readingHint: `Hint ${index + 1}`,
+    weather: { kind: "rain", defaultLevel: "medium" },
+    ambience: "rain-window",
   }));
+
   const spec = {
-    template: { primary: "route" },
+    book: { title: "Fixture Book", author: "Fixture Author" },
+    template: { primary: "route", reason: "fixture" },
     entryGuide: {
       soundRequiredAfterStart: true,
-      steps: [{ text: "Begin slowly." }, { text: "Tune in." }, { text: "Start." }],
-      motion: "route-path-light"
+      steps: [{ text: "慢慢开始。" }, { text: "听见此刻。" }, { text: "进入阅读。" }],
+      motion: "route-path-light",
     },
-    audio: { ambienceFiles: ["./assets/audio/fallback.mp3"] },
+    audio: {
+      bgmFile: "./assets/audio/bgm.mp3",
+      ambienceFiles: {
+        "rain-window": ambienceFile,
+      },
+    },
     stages,
-    assets: { images: [{ role: "base", path: "./concept-image.png" }] }
+    assets: {
+      images: [{ role: "base", path: "./assets/images/base.png" }],
+    },
   };
-  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\n[0,1,2].forEach(function(i){var b=document.createElement("button");b.setAttribute("data-vr-stage",i);b.textContent="Stage "+(i+1);document.querySelector(".vr-scene").appendChild(b);});`);
-  fs.writeFileSync(path.join(dir, "space-spec.json"), JSON.stringify(spec));
-  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({ status: "failed" }));
-  fs.writeFileSync(path.join(dir, "concept-image.png"), makeMinimalPNG());
-  fs.writeFileSync(path.join(dir, "assets/audio/fallback.mp3"), Buffer.alloc(44));
+
+  const appJs = `
+window.VIBE_READING_SPEC = ${JSON.stringify(spec, null, 2)};
+document.addEventListener("DOMContentLoaded", function () {
+  var root = document.querySelector("[data-vr-companion-root]");
+  if (!root) return;
+  root.innerHTML = ${JSON.stringify(controlMarkup())};
+  ["off", "medium", "high"].forEach(function (level) {
+    var button = root.querySelector('[data-vr-weather-level="' + level + '"]');
+    if (button) button.setAttribute("data-vr-weather-level", level);
+  });
+});
+`;
+
+  fs.writeFileSync(path.join(dir, "app.js"), appJs);
+  fs.writeFileSync(path.join(dir, "space-spec.json"), JSON.stringify(spec, null, 2));
+  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({ status: "failed", is_instrumental: true, file: "./assets/audio/bgm.mp3", reason: "fixture" }, null, 2));
+  fs.writeFileSync(path.join(dir, "assets", "images", "base.png"), makeMinimalPNG());
+  fs.writeFileSync(path.join(dir, "assets", "audio", "rain-window.mp3"), Buffer.alloc(44, 1));
   return dir;
 }
 
@@ -71,7 +123,7 @@ function evaluate(dir) {
   return spawnSync(process.execPath, [evaluator, dir], { encoding: "utf8" });
 }
 
-test("evaluator accepts scaffold with 3 to 6 stages", (t) => {
+test("evaluator accepts fixture with 3 to 6 stages", (t) => {
   const dirs = [makeFixture(3), makeFixture(6)];
   t.after(() => dirs.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
   for (const dir of dirs) {
@@ -88,120 +140,92 @@ test("evaluator rejects out-of-range stages", (t) => {
   assert.match(result.stdout, /stages must contain 3-6 items/);
 });
 
-test("evaluator rejects inline JavaScript", (t) => {
+test("evaluator rejects fetch dependency", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  fs.appendFileSync(path.join(dir, "index.html"), "<script>console.log('inline')</script>");
+  fs.appendFileSync(path.join(dir, "app.js"), "\nfetch('./space-spec.json');\n");
   const result = evaluate(dir);
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /must not inline JavaScript/);
+  assert.match(result.stdout, /must not depend on fetch/);
 });
 
-test("evaluator rejects old symbols template", (t) => {
+test("evaluator rejects missing core hooks", (t) => {
+  const dir = makeFixture(3);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const appPath = path.join(dir, "app.js");
+  const appJs = fs.readFileSync(appPath, "utf8").replace(/data-vr-timer-mode/g, "data-vr-missing-timer-mode");
+  fs.writeFileSync(appPath, appJs);
+  const result = evaluate(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /data-vr-timer-mode/);
+});
+
+test("evaluator rejects stage ambience keys missing from audio map", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const specPath = path.join(dir, "space-spec.json");
   const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
-  spec.template.primary = "symbols";
-  fs.writeFileSync(specPath, JSON.stringify(spec));
-  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\n[0,1,2].forEach(function(i){var b=document.createElement("button");b.setAttribute("data-vr-stage",i);b.textContent="Stage "+(i+1);document.querySelector(".vr-scene").appendChild(b);});`);
+  spec.stages[0].ambience = "missing-key";
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\ndocument.addEventListener("DOMContentLoaded", function(){document.querySelector("[data-vr-companion-root]").innerHTML=${JSON.stringify(controlMarkup())};});`);
   const result = evaluate(dir);
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /symbols.*oracle/);
+  assert.match(result.stdout, /must reference a key in audio\.ambienceFiles/);
 });
 
-test("evaluator accepts reused BGM with source", (t) => {
+test("evaluator accepts reused BGM with source and local file", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({ status: "reused", reused_from: "output/2026-01-01-Prior" }));
+  fs.writeFileSync(path.join(dir, "assets", "audio", "bgm.mp3"), Buffer.alloc(1200, 1));
+  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({
+    status: "reused",
+    is_instrumental: true,
+    file: "./assets/audio/bgm.mp3",
+    reused_from: "output/2026-01-01-Prior",
+  }, null, 2));
   const result = evaluate(dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
-test("evaluator rejects reused BGM without source", (t) => {
+test("evaluator ignores optional raw prompt metadata", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({ status: "reused" }));
-  const result = evaluate(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /reused_from|sourceOutput/);
-});
-
-test("evaluator rejects weather.kind not in allowlist", (t) => {
-  const dir = makeFixture(3);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const spec = JSON.parse(fs.readFileSync(path.join(dir, "space-spec.json"), "utf8"));
-  spec.weather = { kind: "invalid-weather", defaultLevel: "low" };
-  fs.writeFileSync(path.join(dir, "space-spec.json"), JSON.stringify(spec));
-  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\n[0,1,2].forEach(function(i){var b=document.createElement("button");b.setAttribute("data-vr-stage",i);b.textContent="Stage "+(i+1);document.querySelector(".vr-scene").appendChild(b);});`);
-  const result = evaluate(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /not in the runtime allowlist/);
-});
-
-test("evaluator checks note area and volume controls via DOM attributes", (t) => {
-  const dir = makeFixture(3);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-  html = html.replace(/data-vr-note-textarea/g, "");
-  html = html.replace(/data-vr-note-save/g, "");
-  html = html.replace(/data-vr-bgm-volume/g, "");
-  html = html.replace(/data-vr-ambience-volume/g, "");
-  fs.writeFileSync(path.join(dir, "index.html"), html);
-  const result = evaluate(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /note area/);
-  assert.match(result.stdout, /BGM volume/);
-  assert.match(result.stdout, /ambience volume/);
-});
-
-test("evaluator rejects Three.js in template name", (t) => {
-  const dir = makeFixture(3);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const spec = JSON.parse(fs.readFileSync(path.join(dir, "space-spec.json"), "utf8"));
-  spec.template.primary = "instrument";
-  spec.book = { title: "Three-Body Problem" };
-  fs.writeFileSync(path.join(dir, "space-spec.json"), JSON.stringify(spec));
-  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\n[0,1,2].forEach(function(i){var b=document.createElement("button");b.setAttribute("data-vr-stage",i);b.textContent="Stage "+(i+1);document.querySelector(".vr-scene").appendChild(b);});`);
+  fs.writeFileSync(path.join(dir, "bgm-meta.json"), JSON.stringify({
+    status: "failed",
+    is_instrumental: true,
+    file: "./assets/audio/bgm.mp3",
+    prompt: "do not keep this",
+  }, null, 2));
   const result = evaluate(dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
-test("evaluator checks weather level buttons (off/low/medium)", (t) => {
+test("evaluator warns but does not fail on ambience-weather mismatch", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-  html = html.replace(/data-vr-weather-level="off"/g, "");
-  html = html.replace(/data-vr-weather-level="low"/g, "");
-  html = html.replace(/data-vr-weather-level="medium"/g, "");
-  fs.writeFileSync(path.join(dir, "index.html"), html);
-  const result = evaluate(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /weather level button/);
-});
-
-test("evaluator rejects data attributes hidden in HTML comments", (t) => {
-  const dir = makeFixture(3);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  let html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-  // Remove all real data-vr-note-save attributes
-  html = html.replace(/ data-vr-note-save/g, " data-vr-REMOVED-note-save");
-  // But add one inside a comment — should NOT satisfy the check
-  html = html.replace("</body>", "<!-- <button data-vr-note-save>Fake</button> -->\n</body>");
-  fs.writeFileSync(path.join(dir, "index.html"), html);
-  const result = evaluate(dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /note save/);
-});
-
-test("evaluator rejects scaffold prompt remnants", (t) => {
-  const dir = makeFixture(3);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  // Simulate old scaffold creating prompt files
-  fs.mkdirSync(path.join(dir, "prompts"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "prompts", "bgm.txt"), "old prompt");
-  fs.writeFileSync(path.join(dir, "prompts", "image.txt"), "old prompt");
-  // The evaluator should NOT fail because of extra files — it just checks required files exist
+  const specPath = path.join(dir, "space-spec.json");
+  const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
+  spec.audio.ambienceFiles.drizzle = "./assets/audio/drizzle.mp3";
+  spec.stages[0].ambience = "drizzle";
+  spec.stages[0].weather = { kind: "snow", defaultLevel: "medium" };
+  fs.writeFileSync(path.join(dir, "assets", "audio", "drizzle.mp3"), Buffer.alloc(1200, 1));
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\ndocument.addEventListener("DOMContentLoaded", function(){document.querySelector("[data-vr-companion-root]").innerHTML=${JSON.stringify(controlMarkup())};});`);
   const result = evaluate(dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /usually pairs with rain or storm-rain/);
+});
+
+test("evaluator rejects failed BGM without ambience fallback", (t) => {
+  const dir = makeFixture(3);
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const specPath = path.join(dir, "space-spec.json");
+  const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
+  spec.audio.ambienceFiles = {};
+  spec.stages.forEach((stage) => { stage.ambience = ""; });
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+  fs.writeFileSync(path.join(dir, "app.js"), `window.VIBE_READING_SPEC = ${JSON.stringify(spec)};\ndocument.addEventListener("DOMContentLoaded", function(){document.querySelector("[data-vr-companion-root]").innerHTML=${JSON.stringify(controlMarkup())};});`);
+  const result = evaluate(dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /failed BGM requires at least one stage ambience fallback/);
 });

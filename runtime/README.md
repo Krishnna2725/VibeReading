@@ -1,15 +1,13 @@
 # V2 Shared Runtime
 
-Generated pages must copy and link the shared runtime. Do not inline it after copying it, and do not load the same runtime script or stylesheet twice.
+Generated pages must copy and link the shared runtime. Do not inline it and do
+not load it twice.
 
 Use the scaffold:
 
 ```bash
-node scripts/scaffold-output --output-dir "output/<task>"
+python scripts/scaffold-output.py --output-dir "output/<task>"
 ```
-
-Falls back to ``python scripts/scaffold-output.py`` automatically when
-``python3`` is not on PATH (common on Windows).
 
 Standard load order:
 
@@ -17,6 +15,7 @@ Standard load order:
 <link rel="stylesheet" href="./runtime/v2-runtime.css">
 <link rel="stylesheet" href="./style.css">
 ...
+<script src="./runtime/libs/p5.min.js"></script>
 <script src="./app.js"></script>
 <script src="./runtime/v2-runtime.js"></script>
 ```
@@ -26,12 +25,12 @@ Standard load order:
 The runtime owns:
 
 - guide state and click-stepped guide progression;
-- sound start and BGM-to-ambience fallback;
+- BGM start plus current-stage ambience handling;
+- stage ambience crossfades;
 - weather layer setup;
 - stage switching events;
 - timer and pomodoro state;
-- `data-vr-*` event binding.
+- hook-based `data-vr-*` event binding.
 
-The runtime binds state and events only. Each template provides its own embedded companion control and connects it through `data-vr-stage`, `data-vr-current-stage`, `data-vr-current-hint`, `data-vr-weather-level`, `data-vr-sound-toggle`, and `data-vr-timer-*` attributes.
-
-The scaffold copies local `runtime/libs/p5.min.js`. Shared weather prefers p5 instance mode and falls back to Canvas 2D if p5 is unavailable.
+The runtime does not define a universal companion panel. Templates provide their
+own controls and connect them through shared hooks.

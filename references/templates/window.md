@@ -14,6 +14,18 @@ Literary fiction, nature, place, seasons, solitude, urban observation, waiting, 
 Image-led.
 Generate a complete 16:9 window-side scene as the base image. The frontend should add weather, guide, stage transitions, and the template control; it should not redraw a complex window.
 
+Before writing the image prompt, decide explicitly:
+
+```text
+single-image mode
+or
+base image + 1 to 3 image-to-image stage variants
+```
+
+Use variants only when changes in outside world, season, weather, time, or light
+carry meaningful reading-stage differences. Do not generate extra variants by
+habit.
+
 ## Image Composition Contract
 
 The image prompt must include:
@@ -55,73 +67,46 @@ subject, composition, lighting, material, camera, mood, color, texture, negative
 
 Always include the exact no-text constraint. Never generate text embedded in images, UI controls inside images, posters, title cards, signs, labels, book covers with readable text, over-detailed furniture, or faces unless explicitly necessary and spoiler-safe.
 
+The final prompt submitted to the image tool must not exceed 400 Unicode
+characters. Distill the composition, outside world, light, material, mood, and
+negative constraints before submission; do not paste planning prose into the
+image tool.
+
 ### Output Files
 
 When image generation is used, write:
 
 ```text
 concept-image.png
-prompts/image.txt
 stage-2.png       optional
 stage-3.png       optional
 stage-4.png       optional
 ```
 
-## Window Companion Panel (阿勒泰规格)
+## Window Control Language
 
-The Window template uses a **预制 companion panel** injected by the runtime. This is the fixed engineering contract — agents do not design the panel, they use it.
+Agents must design the control as part of the window-side reading space itself.
 
-### Panel Contract
+### Control Contract
 
-```text
-position:         fixed, bottom center
-max-width:        min(74vw, 640px)
-border-radius:    20px 20px 0 0
-background:       rgba(18, 20, 20, 0.74) with backdrop-filter: blur(16px)
-border:           1px solid rgba(255,255,255,0.1), bottom none
-z-index:          50
-```
+- Controls feel like part of the window or glass structure.
+- The default state is collapsed so the reading view stays clean.
+- Expanded state should still preserve most of the reading view.
+- The entry point should feel adjacent to the book and window: latch, condensation mark, glass-edge tab, paper slip, sill mark, or another window-native cue.
+- The runtime only wires stable hooks; it does not provide a fixed four-layer panel or fixed bottom-center dock.
 
-### Panel Structure (Four Layers)
+### Control Behavior
 
-```text
-Layer 1: Stage Selector
-  - horizontal scroll row of stage pills
-  - data-vr-stage attributes for runtime binding
-  - aria-pressed state for current stage
+- After guide completes, the control entry should remain discoverable but restrained.
+- Expand and collapse behavior should feel physically related to the window/book relationship.
+- Stage info, timer, weather, sound, and replay guide may be distributed across the window object, as long as the interaction language stays coherent.
+- The control must not become a pasted-on dashboard card.
 
-Layer 2: Stage Info
-  - data-vr-current-stage  (title, accent color)
-  - data-vr-current-range  (chapter range)
-  - data-vr-current-hint   (reading hint)
+### Why This Matters
 
-Layer 3: Controls Row
-  - data-vr-timer-display  (MM:SS)
-  - data-vr-timer-toggle   (pause/resume)
-  - data-vr-timer-reset
-  - data-vr-timer-mode     (elapsed/pomodoro select)
-  - data-vr-sound-toggle   (mute/unmute)
-  - data-vr-bgm-volume     (range slider)
-  - data-vr-ambience-volume (range slider)
-  - data-vr-weather-level  (off/low/medium buttons)
-  - data-vr-guide-replay
-
-Layer 4: Note Area
-  - data-vr-note-textarea  (reading note input)
-  - data-vr-note-save      (save as markdown)
-```
-
-### Panel Behavior
-
-- After guide completes, the panel fades in at bottom center.
-- The panel toggle tab collapses/expands the panel content.
-- The panel is always visible in reading mode (data-vr-mode="reading").
-- Frosted glass style may be recolored via --book-accent for book theming.
-- The panel does NOT cover the window view — it sits at the bottom edge.
-
-### Why This Panel Exists
-
-Previously, the Window companion was a right-bottom 220px card that agents had to design from scratch each time. This led to inconsistent, fragile outputs. The预制 panel eliminates that variance: every Window page gets the same solid panel, and the agent only writes book-specific stage data and visual styling around it.
+Window pages need consistency of capability without losing book-specific authorship.
+The shared shell now guarantees wiring only. The page author decides how the
+glass, sill, latch, tabs, and slips become the actual interface.
 
 ## Stage Switching
 
@@ -167,7 +152,6 @@ Avoid:
 
 - interior furniture as main subject;
 - centered subtitle-only guide;
-- companion card floating far from the window;
+- pasted generic companion cards or fixed dashboard slabs;
 - stage chips covering the view;
-- image prompts that include UI instructions or text;
-- right-bottom 220px small card (use the预制 panel instead).
+- image prompts that include UI instructions or text.

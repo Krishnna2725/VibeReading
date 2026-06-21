@@ -20,7 +20,7 @@ Only generate an image if a wordless table or paper texture is genuinely needed.
 
 - **Default: no image generation.** Build the card table with HTML/CSS/SVG/p5.
 - If an image is generated, follow standard prompt discipline: no text, no UI, no labels.
-- When no image is generated, do not create `concept-image.png` or `prompts/image.txt`.
+- When no image is generated, do not create placeholder image deliverables.
 
 ## Stable Object Skeleton
 
