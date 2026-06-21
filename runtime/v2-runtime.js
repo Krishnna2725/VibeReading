@@ -11,10 +11,20 @@
   /* ── Guide motion presets (one per template) ── */
   const GUIDE_MOTION_PRESETS = [
     "window-fog-clear",
-    "vinyl-groove-orbit",
-    "instrument-scan-lock",
-    "route-path-light",
-    "oracle-card-reveal"
+    "window-rain-reveal",
+    "window-light-shaft",
+    "vinyl-needle-descent",
+    "vinyl-groove-resonance",
+    "vinyl-dust-orbit",
+    "instrument-signal-lock",
+    "instrument-dial-seek",
+    "instrument-device-wake",
+    "route-path-draw",
+    "route-distant-lights",
+    "route-map-wind",
+    "oracle-table-reveal",
+    "oracle-card-turn",
+    "oracle-symbol-bloom"
   ];
 
   function normalizeWeatherLevel(level) {
@@ -571,9 +581,16 @@
     if (bookTitle) bookTitle.textContent = spec.book?.title || (isChinese ? "开始阅读" : "Start Reading");
     root.dataset.vrTemplate = templateId;
 
-    /* Resolve guide motion preset */
+    /* Resolve guide motion preset — map old names to new ones */
+    const OLD_PRESET_MAP = {
+      "vinyl-groove-orbit": "vinyl-groove-resonance",
+      "instrument-scan-lock": "instrument-signal-lock",
+      "route-path-light": "route-path-draw",
+      "oracle-card-reveal": "oracle-table-reveal"
+    };
     const rawMotion = String(spec.entryGuide?.motion || spec.entryGuide?.layout || templateId).toLowerCase();
-    const guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion.includes(p.split("-")[0])) || rawMotion;
+    let guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion.includes(p.split("-")[0])) || rawMotion;
+    if (OLD_PRESET_MAP[guideMotion]) guideMotion = OLD_PRESET_MAP[guideMotion];
     root.dataset.vrGuideMotion = guideMotion;
 
     let guideTimers = [];
@@ -2151,126 +2168,339 @@
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
+        let currentStep = 0;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          const count = reduceMotion ? 20 : 80;
-          particles = Array.from({ length: count }, (_, i) => ({
-            x: Math.random() * p.width, y: Math.random() * p.height,
-            seed: Math.random() * 1000, size: 1 + Math.random() * 3,
-            orbit: 30 + Math.random() * 160, delay: i / count,
-            life: Math.random() * 300
-          }));
+          const count = reduceMotion ? 18 : 70;
+          particles = Array.from({ length: count }, function (_, i) {
+            return {
+              x: Math.random() * p.width, y: Math.random() * p.height,
+              seed: Math.random() * 1000, size: 0.8 + Math.random() * 2.5,
+              life: Math.random() * 300, delay: i / count
+            };
+          });
         }
 
-        p.setup = () => {
-          const canvas = p.createCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+        p.setup = function () {
+          var canvas = p.createCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
           canvas.parent(layer);
           p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
           p.frameRate(24);
           rebuild();
         };
 
-        p.windowResized = () => {
+        p.windowResized = function () {
           p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
           rebuild();
         };
 
-        p.draw = () => {
-          p.clear();
-          const time = p.frameCount * 0.016;
+        /* Read current guide step from DOM */
+        function getStep() {
+          return parseInt(root.dataset.vrGuidePhase || "0", 10);
+        }
 
-          // Template-specific full-screen atmospheric shapes (no crosshair/center circle)
-          if (motion.includes("window")) {
-            // Fog clearing: organic mist wisps that dissolve, not straight lines
-            for (let i = 0; i < 8; i++) {
-              const baseX = p.width * (0.15 + (i / 8) * 0.7);
-              const t = time * 0.7 + i * 1.2;
-              const y1 = p.noise(t, i * 0.3) * p.height;
-              const y2 = p.noise(t + 5, i * 0.3 + 2) * p.height;
-              const alpha = reduceMotion ? 6 : 10 + Math.sin(time + i) * 4;
-              p.stroke(220, 235, 240, alpha);
-              p.strokeWeight(1.5 + Math.sin(t * 0.5) * 0.8);
+        p.draw = function () {
+          p.clear();
+          var time = p.frameCount * 0.016;
+          currentStep = getStep();
+          var stepT = Math.min(1, currentStep / 2); /* 0..1 across 3 steps */
+
+          /* ── Window presets ── */
+          if (motion === "window-fog-clear" || motion === "window") {
+            /* Fog clearing: mist wisps that thin with each step */
+            var fogAlpha = Math.max(3, 14 - stepT * 12);
+            for (var i = 0; i < 10; i++) {
+              var baseX = p.width * (0.1 + (i / 10) * 0.8);
+              var t = time * 0.5 + i * 1.5;
+              var y1 = p.noise(t, i * 0.3) * p.height;
+              var y2 = p.noise(t + 5, i * 0.3 + 2) * p.height;
+              p.stroke(220, 235, 240, reduceMotion ? fogAlpha * 0.5 : fogAlpha);
+              p.strokeWeight(1.2 + Math.sin(t * 0.4) * 0.6);
               p.noFill();
               p.beginShape();
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.cos(t * 0.2) * 30, (y1 + y2) / 2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
+              p.curveVertex(baseX + Math.sin(t * 0.3) * 50, y1);
+              p.curveVertex(baseX + Math.sin(t * 0.3) * 50, y1);
+              p.curveVertex(baseX + Math.cos(t * 0.2) * 35, (y1 + y2) / 2);
+              p.curveVertex(baseX - Math.sin(t * 0.4) * 40, y2);
+              p.curveVertex(baseX - Math.sin(t * 0.4) * 40, y2);
               p.endShape();
             }
-          } else if (motion.includes("route")) {
-            // Route line drawing forward
+            /* Light shaft grows with step */
+            if (currentStep >= 1) {
+              var shaftAlpha = (currentStep === 1 ? 8 : 15) * (reduceMotion ? 0.5 : 1);
+              var ctx = p.drawingContext;
+              ctx.save();
+              ctx.globalCompositeOperation = "screen";
+              p.noStroke();
+              p.fill(240, 245, 255, shaftAlpha);
+              var sx = p.width * 0.6;
+              p.quad(sx - 20, 0, sx + 60, 0, sx + 120 + stepT * 40, p.height, sx - 40 + stepT * 20, p.height);
+              ctx.restore();
+            }
+          } else if (motion === "window-rain-reveal") {
+            /* Rain traces on glass: diagonal streaks that clear */
+            var streakAlpha = Math.max(5, 20 - stepT * 18);
+            for (var i = 0; i < 12; i++) {
+              var sx = p.noise(i * 0.5, time * 0.1) * p.width;
+              var sy = (time * 30 + i * 80) % (p.height + 100) - 50;
+              p.stroke(200, 220, 235, reduceMotion ? streakAlpha * 0.4 : streakAlpha);
+              p.strokeWeight(0.6 + Math.sin(i) * 0.3);
+              p.line(sx, sy, sx - 8, sy + 25 + Math.sin(time + i) * 5);
+            }
+            /* Glass reflection edge */
+            if (currentStep >= 2) {
+              p.stroke(255, 255, 255, 12);
+              p.strokeWeight(1);
+              p.line(p.width * 0.3, 0, p.width * 0.3, p.height);
+            }
+          } else if (motion === "window-light-shaft") {
+            /* Diagonal light beam that expands */
+            var beamWidth = 30 + stepT * 80;
+            var beamAlpha = 6 + stepT * 10;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(245, 240, 220, reduceMotion ? beamAlpha * 0.4 : beamAlpha);
+            var bx = p.width * 0.55;
+            p.quad(bx - beamWidth * 0.3, 0, bx + beamWidth * 0.7, 0,
+              bx + beamWidth + stepT * 60, p.height, bx - beamWidth * 0.5, p.height);
+            ctx.restore();
+            /* Dust motes in the beam */
+            for (var i = 0; i < 15; i++) {
+              var mx = bx + p.noise(i, time * 0.05) * beamWidth * 2 - beamWidth;
+              var my = p.noise(i + 100, time * 0.03) * p.height;
+              p.noStroke();
+              p.fill(255, 245, 210, 40 + Math.sin(time * 1.5 + i) * 20);
+              p.circle(mx, my, 1.5);
+            }
+          }
+
+          /* ── Vinyl presets ── */
+          else if (motion === "vinyl-needle-descent" || motion === "vinyl-groove-orbit") {
+            /* Concentric grooves that activate with step */
+            var cx = p.width / 2, cy = p.height / 2;
             p.noFill();
-            p.stroke(255, 224, 164, reduceMotion ? 16 : 32);
+            var activeGrooves = 3 + currentStep * 4;
+            for (var i = 0; i < activeGrooves; i++) {
+              var r = 40 + i * 45;
+              var a = reduceMotion ? 5 : 8 + Math.sin(time * 1.2 + i * 0.8) * 4;
+              p.stroke(255, 230, 184, a);
+              p.strokeWeight(0.7);
+              p.circle(cx, cy, r + Math.sin(time + i * 0.3) * 4);
+            }
+            /* Needle shadow (step 1+) */
+            if (currentStep >= 1) {
+              var needleAngle = -0.3 + stepT * 0.5;
+              var nx = cx + Math.cos(needleAngle) * 120;
+              var ny = cy + Math.sin(needleAngle) * 120;
+              p.stroke(200, 180, 140, 15);
+              p.strokeWeight(2);
+              p.line(cx + 80, cy - 60, nx, ny);
+            }
+          } else if (motion === "vinyl-groove-resonance") {
+            /* Resonance waves emanating from center */
+            var cx = p.width / 2, cy = p.height / 2;
+            p.noFill();
+            var waveCount = 2 + currentStep * 3;
+            for (var i = 0; i < waveCount; i++) {
+              var r = 30 + i * 60 + Math.sin(time * 0.8 + i) * 10;
+              var a = reduceMotion ? 4 : 7 + Math.sin(time + i * 1.2) * 3;
+              p.stroke(255, 225, 175, a);
+              p.strokeWeight(0.8);
+              p.ellipse(cx, cy, r * 2, r * 1.4);
+            }
+          } else if (motion === "vinyl-dust-orbit") {
+            /* Dust particles orbiting a central point */
+            var cx = p.width / 2, cy = p.height / 2;
+            var orbitCount = 8 + currentStep * 6;
+            p.noStroke();
+            for (var i = 0; i < orbitCount; i++) {
+              var angle = time * 0.3 + (i / orbitCount) * Math.PI * 2;
+              var dist = 60 + i * 15 + Math.sin(time * 0.5 + i) * 10;
+              var dx = cx + Math.cos(angle) * dist;
+              var dy = cy + Math.sin(angle) * dist * 0.6;
+              var a = reduceMotion ? 30 : 50 + Math.sin(time * 1.5 + i) * 20;
+              p.fill(255, 240, 200, a);
+              p.circle(dx, dy, 1.5 + Math.sin(time + i) * 0.5);
+            }
+          }
+
+          /* ── Instrument presets ── */
+          else if (motion === "instrument-signal-lock" || motion === "instrument-scan-lock") {
+            /* Scanlines that stabilize with step */
+            var stability = stepT;
+            p.stroke(150, 230, 150, reduceMotion ? 8 : 14);
+            p.strokeWeight(0.5);
+            var scanY = (time * 30) % p.height;
+            for (var y = 0; y < p.height; y += 6) {
+              var wobble = (1 - stability) * Math.sin(y * 0.05 + time * 3) * 8;
+              var dist = Math.abs(y - scanY);
+              var a = dist < 25 ? (25 - dist) / 25 : 0;
+              p.stroke(150, 230, 150, a * (reduceMotion ? 15 : 35));
+              p.line(wobble, y, p.width + wobble, y);
+            }
+            /* Lock indicator (step 2) */
+            if (currentStep >= 2) {
+              p.fill(150, 230, 150, 30);
+              p.noStroke();
+              p.rect(p.width * 0.45, p.height * 0.48, p.width * 0.1, 4, 2);
+            }
+          } else if (motion === "instrument-dial-seek") {
+            /* Frequency dial sweeping */
+            var dialX = p.width * 0.5;
+            var sweepPos = (time * 0.2 + stepT * 0.3) % 1;
+            var dialY = p.height * 0.3 + sweepPos * p.height * 0.4;
+            p.stroke(150, 230, 150, 12);
+            p.strokeWeight(0.4);
+            for (var y = p.height * 0.2; y < p.height * 0.8; y += 4) {
+              p.line(dialX - 60, y, dialX + 60, y);
+            }
+            /* Pointer line */
+            p.stroke(200, 255, 200, reduceMotion ? 20 : 35);
+            p.strokeWeight(1.5);
+            p.line(dialX - 50, dialY, dialX + 50, dialY);
+          } else if (motion === "instrument-device-wake") {
+            /* CRT warm-up glow */
+            var glowRadius = 50 + stepT * Math.min(p.width, p.height) * 0.4;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            var gradient = ctx.createRadialGradient(p.width / 2, p.height / 2, 0, p.width / 2, p.height / 2, glowRadius);
+            gradient.addColorStop(0, "rgba(150,230,150," + (0.06 + stepT * 0.04) + ")");
+            gradient.addColorStop(1, "rgba(150,230,150,0)");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, p.width, p.height);
+            ctx.restore();
+          }
+
+          /* ── Route presets ── */
+          else if (motion === "route-path-draw" || motion === "route-path-light") {
+            /* Path line drawing forward */
+            var progress = 0.3 + stepT * 0.7;
+            p.noFill();
+            p.stroke(255, 224, 164, reduceMotion ? 14 : 28);
             p.strokeWeight(1.5);
             p.beginShape();
-            for (let i = 0; i < 9; i++) {
-              const x = p.width * (0.05 + i * 0.11);
-              const y = p.height * 0.65 + Math.sin(time * 0.8 + i * 0.6) * 25;
+            var pts = 10;
+            for (var i = 0; i < pts * progress; i++) {
+              var x = p.width * (0.05 + (i / pts) * 0.9);
+              var y = p.height * 0.6 + Math.sin(i * 0.6) * 25;
               p.curveVertex(x, y);
             }
             p.endShape();
-          } else if (motion.includes("vinyl")) {
-            // Groove ripples expanding from center
-            p.noFill();
-            for (let r = 40; r < Math.max(p.width, p.height); r += 50) {
-              const alpha = reduceMotion ? 6 : 10 + Math.sin(time * 1.5 + r * 0.01) * 5;
-              p.stroke(255, 230, 184, alpha);
-              p.strokeWeight(0.8);
-              p.circle(p.width / 2, p.height / 2, r + Math.sin(time + r * 0.02) * 6);
+            /* Station dots */
+            for (var i = 0; i < 3 * progress; i++) {
+              var x = p.width * (0.15 + i * 0.25);
+              var y = p.height * 0.6 + Math.sin(i * 0.6) * 25;
+              p.fill(255, 224, 164, reduceMotion ? 25 : 45);
+              p.noStroke();
+              p.circle(x, y, 5);
             }
-          } else if (motion.includes("instrument")) {
-            // Scanlines sweeping
-            p.stroke(150, 230, 150, reduceMotion ? 10 : 18);
-            p.strokeWeight(0.6);
-            const scanY = (time * 40) % p.height;
-            for (let y = 0; y < p.height; y += 6) {
-              const dist = Math.abs(y - scanY);
-              const alpha = dist < 30 ? (30 - dist) / 30 : 0;
-              p.stroke(150, 230, 150, alpha * (reduceMotion ? 20 : 40));
-              p.line(0, y, p.width, y);
+          } else if (motion === "route-distant-lights") {
+            /* Distant light points appearing */
+            var lightCount = 2 + currentStep * 2;
+            p.noStroke();
+            for (var i = 0; i < lightCount; i++) {
+              var lx = p.width * (0.2 + i * 0.2);
+              var ly = p.height * (0.3 + Math.sin(i * 1.5) * 0.15);
+              var la = reduceMotion ? 15 : 25 + Math.sin(time + i * 2) * 10;
+              var cache = p._cache;
+              if (cache) {
+                var sprite = cache.radial({ radius: 20, color: [255, 224, 164], alpha: 0.3, midAlpha: 0.05 });
+                cache.draw(sprite, lx, ly, 40, 40, "screen", la);
+              } else {
+                p.fill(255, 224, 164, la);
+                p.circle(lx, ly, 6);
+              }
             }
-          } else if (motion.includes("oracle")) {
-            // Card-edge glows floating
-            p.noFill();
-            p.stroke(255, 220, 170, reduceMotion ? 12 : 22);
-            p.strokeWeight(1);
-            for (let i = 0; i < 5; i++) {
-              const cx = p.width * (0.2 + i * 0.15);
-              const cy = p.height * 0.5 + Math.sin(time * 0.7 + i) * 30;
-              p.rect(cx - 20, cy - 30, 40, 60, 4);
+          } else if (motion === "route-map-wind") {
+            /* Wind-swept map texture lines */
+            for (var i = 0; i < 8; i++) {
+              var baseX = p.width * (0.1 + (i / 8) * 0.8);
+              var t = time * 0.4 + i * 1.3;
+              var y = p.noise(t, i * 0.4) * p.height;
+              var windOffset = Math.sin(time * 0.6 + i) * 20 * (1 + stepT);
+              p.stroke(255, 220, 160, reduceMotion ? 5 : 10);
+              p.strokeWeight(0.6);
+              p.line(baseX + windOffset, y, baseX + windOffset + 40, y + 5);
             }
           }
 
-          // Full-screen ambient particles (per-template color)
-          p.noStroke();
-          for (const particle of particles) {
-            if (!reduceMotion) {
-              particle.x += Math.sin(time * 0.3 + particle.seed) * 0.6;
-              particle.y += motion.includes("window") ? 0.8 : Math.cos(time * 0.2 + particle.seed) * 0.4;
-              particle.life += 1;
+          /* ── Oracle presets ── */
+          else if (motion === "oracle-table-reveal" || motion === "oracle-card-reveal") {
+            /* Table cloth texture: subtle horizontal lines */
+            p.stroke(255, 220, 170, reduceMotion ? 4 : 7);
+            p.strokeWeight(0.3);
+            for (var y = 0; y < p.height; y += 12) {
+              p.line(0, y, p.width, y);
             }
-            // Wrap
-            if (particle.y > p.height + 10) { particle.y = -10; particle.x = Math.random() * p.width; }
-            if (particle.y < -10) { particle.y = p.height + 10; }
+            /* Candle glow (grows with step) */
+            var glowSize = 30 + stepT * 60;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            var gradient = ctx.createRadialGradient(p.width * 0.5, p.height * 0.35, 0, p.width * 0.5, p.height * 0.35, glowSize);
+            gradient.addColorStop(0, "rgba(255,220,170," + (0.08 + stepT * 0.05) + ")");
+            gradient.addColorStop(1, "rgba(255,220,170,0)");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, p.width, p.height);
+            ctx.restore();
+          } else if (motion === "oracle-card-turn") {
+            /* Card silhouettes that rotate */
+            for (var i = 0; i < 3; i++) {
+              var cx = p.width * (0.3 + i * 0.2);
+              var cy = p.height * 0.5;
+              var angle = (i === currentStep % 3) ? stepT * 0.3 : 0;
+              p.push();
+              p.translate(cx, cy);
+              p.rotate(angle);
+              p.noFill();
+              p.stroke(255, 220, 170, reduceMotion ? 10 : 18);
+              p.strokeWeight(0.8);
+              p.rect(-18, -28, 36, 56, 3);
+              p.pop();
+            }
+          } else if (motion === "oracle-symbol-bloom") {
+            /* Ink bloom: expanding circles from center */
+            var cx = p.width / 2, cy = p.height / 2;
+            var bloomCount = 1 + currentStep;
+            p.noStroke();
+            for (var i = 0; i < bloomCount; i++) {
+              var r = 20 + i * 40 + Math.sin(time * 0.5 + i) * 8;
+              var a = reduceMotion ? 4 : 8 - i * 2;
+              p.fill(255, 220, 170, Math.max(2, a));
+              p.circle(cx, cy, r * 2);
+            }
+          }
 
-            const flicker = 0.3 + Math.sin(time * 2 + particle.seed) * 0.2;
-            let r = 255, g = 232, b = 181;
-            if (motion.includes("instrument")) { r = 150; g = 230; b = 150; }
-            else if (motion.includes("route")) { r = 255; g = 210; b = 126; }
-            else if (motion.includes("window")) { r = 220; g = 235; b = 240; }
-            p.fill(r, g, b, flicker * (reduceMotion ? 60 : 90));
-            p.circle(particle.x, particle.y, particle.size * 1.5);
+          /* ── Ambient particles (shared across all presets) ── */
+          p.noStroke();
+          var pr = 255, pg = 232, pb = 181;
+          if (motion.includes("instrument")) { pr = 150; pg = 230; pb = 150; }
+          else if (motion.includes("route")) { pr = 255; pg = 210; pb = 126; }
+          else if (motion.includes("window")) { pr = 220; pg = 235; pb = 240; }
+          for (var i = 0; i < particles.length; i++) {
+            var pt = particles[i];
+            if (!reduceMotion) {
+              pt.x += Math.sin(time * 0.3 + pt.seed) * 0.5;
+              pt.y += motion.includes("window") ? 0.6 : Math.cos(time * 0.2 + pt.seed) * 0.3;
+              pt.life += 1;
+            }
+            if (pt.y > p.height + 10) { pt.y = -10; pt.x = Math.random() * p.width; }
+            if (pt.y < -10) { pt.y = p.height + 10; }
+            var flicker = 0.25 + Math.sin(time * 2 + pt.seed) * 0.15;
+            p.fill(pr, pg, pb, flicker * (reduceMotion ? 50 : 80));
+            p.circle(pt.x, pt.y, pt.size * 1.5);
           }
         };
 
-        p.vrSetGuideFocus = () => { /* no-op: guide uses full-screen, not focus points */ };
+        p.vrSetGuideFocus = function () { /* no-op: guide uses full-screen atmospheric art */ };
       };
       instance = new window.p5(sketch);
       guideArtEngine = {
-        setFocus() { /* no-op */ },
+        setFocus: function () { /* no-op */ },
         destroy() { if (instance) instance.remove(); instance = null; layer.replaceChildren(); }
       };
     }
