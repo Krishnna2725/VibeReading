@@ -713,6 +713,50 @@
             r.life += dt;
             if (r.life > r.maxLife) ripples.deactivate(r);
           });
+          /* Update drop physics */
+          if (!reduceMotion) {
+            p._rainGustPhase = (p._rainGustPhase || 0) + 0.006;
+            const gustX = Math.sin(p._rainGustPhase) * 0.4 * profile.gust;
+            for (let i = 0; i < particles.length; i++) {
+              const d = particles[i];
+              if (!d.active) continue;
+              applyPointerField(d, p._pointer, { mode: "bend", radius: 140, strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1 });
+              d.vx += gustX * 0.02;
+              d.vy += 0.10;
+              d.x += d.vx;
+              d.y += d.vy;
+              d.len = d.vy * (0.9 + d.depth * 0.55);
+              if (d.y >= p.height - 10) {
+                const x = d.x;
+                if (splash && Math.random() < profile.impacts) {
+                  for (let b = 0; b < 2 + (Math.random() < 0.5 ? 1 : 0); b++) {
+                    splash.spawn(function (s) {
+                      s.x = x; s.y = p.height - 10;
+                      s.vx = (Math.random() - 0.5) * 1.8;
+                      s.vy = -(1.2 + Math.random() * 1.5);
+                      s.life = 0.25 + Math.random() * 0.28;
+                      s.maxLife = s.life;
+                      s.size = 1 + Math.random() * 1.3;
+                    });
+                  }
+                  if (ripples) ripples.spawn(function (r) {
+                    r.x = x; r.y = p.height - 10;
+                    r.life = 0; r.maxLife = 0.9 + Math.random() * 0.6;
+                    r.rx = 6 + Math.random() * 8;
+                    r.ry = r.rx * 0.28;
+                  });
+                }
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.25;
+                d.vx = (-0.35 - Math.random() * 0.45) * d.depth;
+                d.vy = (8 + Math.random() * 8) * d.depth;
+              }
+              if (d.y > p.height + 20 || d.x < -40 || d.x > p.width + 40) {
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.25;
+              }
+            }
+          }
           /* Draw drops by depth layer */
           for (let i = 0; i < particles.length; i++) {
             const d = particles[i];
@@ -852,6 +896,50 @@
             r.life += dt;
             if (r.life > r.maxLife) ripples.deactivate(r);
           });
+          /* Update drop physics */
+          if (!reduceMotion) {
+            p._rainGustPhase = (p._rainGustPhase || 0) + 0.008;
+            const gustX = Math.sin(p._rainGustPhase) * 0.7 * profile.gust;
+            for (let i = 0; i < particles.length; i++) {
+              const d = particles[i];
+              if (!d.active) continue;
+              applyPointerField(d, p._pointer, { mode: "bend", radius: 140, strength: 0.5 * profile.pointerStrength, idleCutoff: 0.1 });
+              d.vx += gustX * 0.03;
+              d.vy += 0.14;
+              d.x += d.vx;
+              d.y += d.vy;
+              d.len = d.vy * (0.9 + d.depth * 0.6);
+              if (d.y >= p.height - 10) {
+                const x = d.x;
+                if (splash && Math.random() < profile.impacts) {
+                  for (let b = 0; b < 2 + (Math.random() < 0.6 ? 1 : 0); b++) {
+                    splash.spawn(function (s) {
+                      s.x = x; s.y = p.height - 10;
+                      s.vx = (Math.random() - 0.5) * 2.2;
+                      s.vy = -(1.5 + Math.random() * 1.8);
+                      s.life = 0.2 + Math.random() * 0.25;
+                      s.maxLife = s.life;
+                      s.size = 1 + Math.random() * 1.5;
+                    });
+                  }
+                  if (ripples) ripples.spawn(function (r) {
+                    r.x = x; r.y = p.height - 10;
+                    r.life = 0; r.maxLife = 0.8 + Math.random() * 0.5;
+                    r.rx = 8 + Math.random() * 10;
+                    r.ry = r.rx * 0.25;
+                  });
+                }
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.3;
+                d.vx = (-2.5 - Math.random() * 1.2) * d.depth;
+                d.vy = (9 + Math.random() * 7) * d.depth;
+              }
+              if (d.y > p.height + 20 || d.x < -60) {
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.3;
+              }
+            }
+          }
           /* Draw drops */
           for (let i = 0; i < particles.length; i++) {
             const d = particles[i];
