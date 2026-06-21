@@ -16,6 +16,17 @@ window.VIBE_READING_SPEC = {
 };
 ```
 
+The runtime provides internal infrastructure (not exposed as public API):
+
+- **Frame Clock**: unified dt source, clamped 0..0.05s, pauses on page hide
+- **Pointer Tracker**: smooth coordinates, velocity, idle detection
+- **Pointer Field**: 9 interaction modes (attract/repel/orbit/bend/scatter/illuminate/dissolve/spawn-ripple)
+- **Particle Pool**: pre-allocated fixed-capacity pool
+- **Gradient Sprite Cache**: cached radial gradients (MAX=64)
+- **Intensity Profiles**: per-weather off/medium/high profiles
+
+Effects access these via `p._cache`, `p._pointer`, `p._dt`, `p._particles` on the p5 instance.
+
 Core states:
 
 ```text
