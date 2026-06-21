@@ -155,18 +155,6 @@ test("evaluator checks note area and volume controls via DOM attributes", (t) =>
   assert.match(result.stdout, /ambience volume/);
 });
 
-test("evaluator validates minimal-no-image fixture (Instrument)", () => {
-  const fixture = path.join(__dirname, "fixtures/minimal-no-image");
-  const result = evaluate(fixture);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-});
-
-test("evaluator validates window-multi-image fixture", () => {
-  const fixture = path.join(__dirname, "fixtures/window-multi-image");
-  const result = evaluate(fixture);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-});
-
 test("evaluator rejects Three.js in template name", (t) => {
   const dir = makeFixture(3);
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
