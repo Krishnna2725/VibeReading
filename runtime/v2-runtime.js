@@ -1178,6 +1178,12 @@
 
       snow: {
         count: 180, color: [245, 246, 238], gravity: 1.2, drift: 0.9,
+        setup(p) {
+          /* Ground snow heightmap: one value per 4px of screen width */
+          const slots = Math.ceil(p.width / 4);
+          p._snowGround = new Float32Array(slots);
+          p._snowGroundW = 4;
+        },
         initParticle(w, h) {
           const r = Math.random();
           const depth = r < 0.45 ? 0.55 : r < 0.85 ? 1.0 : 1.45;
@@ -1191,69 +1197,127 @@
             seed: Math.random() * 9999
           };
         },
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          const alpha = particle.depth > 1.2 ? 190 : particle.depth < 0.7 ? 55 : 110;
-          const cache = p._cache;
-          if (cache) {
-            const sprite = cache.radial({
-              radius: 18, color: [r, g, b], alpha: 1,
-              midAlpha: 0.18, midStop: 0.45, outerAlpha: 0
-            });
-            const sz = particle.size * 6;
-            cache.draw(sprite, particle.x, particle.y, sz, sz, "source-over", alpha);
-          } else {
-            p.noStroke();
-            p.fill(r, g, b, alpha * 0.3);
-            p.circle(particle.x, particle.y, particle.size * 4);
-            p.fill(r, g, b, alpha);
-            p.circle(particle.x, particle.y, particle.size * 2);
-          }
-        },
-        tick(particle, p, reduceMotion) {
-          if (reduceMotion) return;
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
           const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
           const profile = getIntensityProfile("snow", lvl);
-          /* Flow field — noise-based wind */
-          const t = performance.now() * 0.0002 + particle.life * 0.01;
-          const flowX = Math.sin(t + particle.seed) * 0.03 * profile.flowAmp;
-          const flowY = Math.cos(t * 0.8 + particle.seed) * 0.01;
-          particle.ax = flowX;
-          particle.ay = 0.003 + flowY;
-          /* Pointer attract with smooth falloff */
-          applyPointerField(particle, p._pointer, {
-            mode: "attract", radius: 140,
-            strength: 0.03 * profile.pointer, idleCutoff: 0.06
-          });
-          /* Edge swirl near pointer center */
-          applyPointerField(particle, p._pointer, {
-            mode: "orbit", radius: 70,
-            strength: 0.012 * profile.swirl, idleCutoff: 0.06
-          });
-          /* Apply acceleration to velocity */
-          particle.vx += particle.ax;
-          particle.vy += particle.ay;
-          /* Damping + speed clamp */
-          particle.vx *= 0.992;
-          particle.vy *= 0.998;
-          const maxSpeed = 0.9 + particle.depth * 1.3;
-          const speed = Math.hypot(particle.vx, particle.vy);
-          if (speed > maxSpeed) {
-            particle.vx = particle.vx / speed * maxSpeed;
-            particle.vy = particle.vy / speed * maxSpeed;
+          const ground = p._snowGround;
+          const gw = p._snowGroundW || 4;
+          const maxGroundH = p.height * 0.1;
+
+          /* Update + draw each flake */
+          for (let i = 0; i < particles.length; i++) {
+            const f = particles[i];
+            if (!f.active) continue;
+
+            /* Physics */
+            if (!reduceMotion) {
+              const t = performance.now() * 0.0002 + f.life * 0.01;
+              const flowX = Math.sin(t + f.seed) * 0.03 * profile.flowAmp;
+              const flowY = Math.cos(t * 0.8 + f.seed) * 0.01;
+              f.ax = flowX;
+              f.ay = 0.003 + flowY;
+              applyPointerField(f, p._pointer, {
+                mode: "attract", radius: 140,
+                strength: 0.03 * profile.pointer, idleCutoff: 0.06
+              });
+              applyPointerField(f, p._pointer, {
+                mode: "orbit", radius: 70,
+                strength: 0.012 * profile.swirl, idleCutoff: 0.06
+              });
+              f.vx += f.ax;
+              f.vy += f.ay;
+              f.vx *= 0.992;
+              f.vy *= 0.998;
+              const maxSpeed = 0.9 + f.depth * 1.3;
+              const speed = Math.hypot(f.vx, f.vy);
+              if (speed > maxSpeed) { f.vx = f.vx / speed * maxSpeed; f.vy = f.vy / speed * maxSpeed; }
+              f.x += f.vx;
+              f.y += f.vy;
+              f.life += 0.5;
+            }
+
+            /* Ground detection: accumulate or respawn */
+            if (ground && f.y >= p.height - 2 - (ground[Math.floor(f.x / gw)] || 0)) {
+              /* Accumulate into heightmap */
+              const gi = Math.floor(f.x / gw);
+              if (gi >= 0 && gi < ground.length) {
+                const addH = 0.3 + f.depth * 0.2;
+                ground[gi] = Math.min(maxGroundH, ground[gi] + addH);
+                /* Spread to neighbors for smoothness */
+                if (gi > 0) ground[gi - 1] = Math.min(maxGroundH, ground[gi - 1] + addH * 0.3);
+                if (gi < ground.length - 1) ground[gi + 1] = Math.min(maxGroundH, ground[gi + 1] + addH * 0.3);
+              }
+              /* Respawn at top */
+              f.x = Math.random() * p.width;
+              f.y = -10 - Math.random() * p.height * 0.3;
+              f.vx = (Math.random() - 0.5) * 0.3 * f.depth;
+              f.vy = (0.5 + Math.random() * 0.9) * f.depth;
+            } else if (f.y > p.height + 20 || f.x < -40 || f.x > p.width + 40) {
+              f.x = Math.random() * p.width;
+              f.y = -10 - Math.random() * p.height * 0.3;
+              f.vx = (Math.random() - 0.5) * 0.3 * f.depth;
+              f.vy = (0.5 + Math.random() * 0.9) * f.depth;
+            }
+
+            /* Draw flake */
+            const alpha = f.depth > 1.2 ? 190 : f.depth < 0.7 ? 55 : 110;
+            const cache = p._cache;
+            if (cache) {
+              const sprite = cache.radial({
+                radius: 18, color: [cr, cg, cb], alpha: 1,
+                midAlpha: 0.18, midStop: 0.45, outerAlpha: 0
+              });
+              const sz = f.size * 6;
+              cache.draw(sprite, f.x, f.y, sz, sz, "source-over", alpha);
+            } else {
+              p.noStroke();
+              p.fill(cr, cg, cb, alpha * 0.3);
+              p.circle(f.x, f.y, f.size * 4);
+              p.fill(cr, cg, cb, alpha);
+              p.circle(f.x, f.y, f.size * 2);
+            }
           }
-          /* Integrate position */
-          particle.x += particle.vx;
-          particle.y += particle.vy;
-          particle.life += 0.5;
-          /* Respawn off-screen */
-          if (particle.y > p.height + 20 || particle.x < -40 || particle.x > p.width + 40) {
-            particle.x = Math.random() * p.width;
-            particle.y = -10 - Math.random() * p.height * 0.3;
-            particle.vx = (Math.random() - 0.5) * 0.3 * particle.depth;
-            particle.vy = (0.5 + Math.random() * 0.9) * particle.depth;
+
+          /* Draw ground snow accumulation */
+          if (ground) {
+            /* Melt: if average height > maxGroundH, shrink all */
+            let sum = 0;
+            for (let i = 0; i < ground.length; i++) sum += ground[i];
+            const avgH = sum / ground.length;
+            const meltFactor = avgH > maxGroundH * 0.8 ? 0.995 : 1.0;
+            if (meltFactor < 1) {
+              for (let i = 0; i < ground.length; i++) {
+                ground[i] *= meltFactor;
+                if (ground[i] < 0.1) ground[i] = 0;
+              }
+            }
+            /* Draw filled ground shape */
+            p.noStroke();
+            /* Slightly darker base */
+            p.fill(cr * 0.88, cg * 0.88, cb * 0.88, 180);
+            p.beginShape();
+            p.vertex(0, p.height);
+            for (let i = 0; i < ground.length; i++) {
+              const x = i * gw;
+              const y = p.height - ground[i];
+              p.vertex(x, y);
+            }
+            p.vertex(p.width, p.height);
+            p.endShape(p.CLOSE);
+            /* Bright top edge */
+            p.stroke(255, 255, 255, 60);
+            p.strokeWeight(1.2);
+            p.noFill();
+            p.beginShape();
+            for (let i = 0; i < ground.length; i++) {
+              p.vertex(i * gw, p.height - ground[i]);
+            }
+            p.endShape();
           }
         },
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
+        tick(particle, p, reduceMotion) { /* drawAll handles all updates */ },
       },
 
       wind: {
