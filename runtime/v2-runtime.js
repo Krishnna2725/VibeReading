@@ -319,6 +319,7 @@
     return t * t * (3 - 2 * t);
   }
   function applyPointerField(particle, tracker, cfg) {
+    if (!tracker) return null;
     const ps = tracker.state;
     if (!ps.active || ps.x == null || ps.idleTime > (cfg.idleCutoff || 0.1)) return null;
     const dx = ps.x - particle.x, dy = ps.y - particle.y;
