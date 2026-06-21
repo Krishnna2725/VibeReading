@@ -1917,11 +1917,15 @@
           rebuild();
         };
 
+        let resizeTimer = 0;
         p.windowResized = () => {
-          p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
-          if (localCache) localCache.destroy();
-          localCache = createGradientSpriteCache(p);
-          rebuild();
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+            syncPointerBounds();
+            if (localCache) { localCache.destroy(); localCache = createGradientSpriteCache(p); }
+            rebuild();
+          }, 100);
         };
 
         p.draw = () => {
@@ -1952,6 +1956,7 @@
       };
       instance = new window.p5(sketch);
       return {
+        _clock: clock,
         updateLevel() { if (instance && instance.vrUpdateLevel) instance.vrUpdateLevel(); },
         destroy() {
           if (instance) instance.remove();
@@ -2660,6 +2665,21 @@
       audioController.stopAll();
       destroyWeatherEngine();
       destroyGuideArt();
+      pointer.destroy();
+    });
+
+    /* ── Visibility pause — stop visual updates when hidden ── */
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        /* Pause all active weather engines */
+        if (weatherEngine && weatherEngine._clock) weatherEngine._clock.pause();
+      } else {
+        /* Resume and reset clock to avoid dt spike */
+        if (weatherEngine && weatherEngine._clock) {
+          weatherEngine._clock.resume();
+          weatherEngine._clock.reset();
+        }
+      }
     });
 
     /* ── Initialize ── */
