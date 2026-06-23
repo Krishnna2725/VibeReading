@@ -2339,14 +2339,14 @@
       if (!window.p5) { layer.dataset.vrGuideArtEngine = "css"; return; }
       layer.dataset.vrGuideArtEngine = "p5";
       let instance = null;
+      const guideClock = createFrameClock();
+      let guideCache = null;
       const motion = root.dataset.vrGuideMotion || templateId;
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
         let currentStep = 0;
         let time = 0;
-        const guideClock = createFrameClock();
-        let guideCache = null;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

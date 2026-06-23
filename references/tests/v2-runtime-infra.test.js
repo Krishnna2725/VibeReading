@@ -111,6 +111,17 @@ test("p5 engine creates and manages gradient cache", () => {
   assert.match(runtime, /p\._cache = localCache/);
 });
 
+test("guide clock and cache share createGuideArt lifecycle scope", () => {
+  const createGuide = runtime.indexOf("function createGuideArt()");
+  const sketch = runtime.indexOf("const sketch = (p) =>", createGuide);
+  const clock = runtime.indexOf("const guideClock = createFrameClock()", createGuide);
+  const cache = runtime.indexOf("let guideCache = null", createGuide);
+
+  assert.ok(createGuide >= 0 && sketch > createGuide);
+  assert.ok(clock > createGuide && clock < sketch);
+  assert.ok(cache > createGuide && cache < sketch);
+});
+
 test("p5 engine attaches pointer to p instance for effects", () => {
   assert.match(runtime, /p\._pointer = pointer/);
 });
