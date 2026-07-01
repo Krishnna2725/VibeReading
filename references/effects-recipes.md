@@ -15,23 +15,23 @@ Agents select weather via `weather.kind` in `space-spec.json` — **do not write
 
 ### Preset Catalog
 
-| kind | visual behavior | useful for | status |
-| --- | --- | --- | --- |
-| `rain` | diagonal streaks, splash ripples, depth glow | windows, memory, night streets | implemented |
-| `storm-rain` | heavy rain, wind斜 streaks, strong splash | storms, drama, conflict | implemented |
-| `fog` | noise-drifted fields, multi-layer depth haze | uncertainty, quiet books, interiors | implemented |
-| `snow` | noise-wind drift, dual-layer glow particles | winter, distance, silence | implemented |
-| `wind` | noise-gust curved streaks, turbulence | route, travel, exposed landscapes | implemented |
-| `ripple` | expanding concentric circles, life-cycle fade | water, dreams, memory | implemented |
-| `water` | horizontal wave curves, gentle drift | rivers, lakes, calm water | implemented |
-| `dust` | floating warm motes, gentle gravity | archives, old rooms, history | implemented |
-| `embers` | rising sparks with glow halos, noise-waver | fireplace, warmth, evening | implemented |
-| `fire` | noise-flicker three-layer flame, turbulence | fireplaces, warmth, intensity | implemented |
-| `signal` | scanlines with sweep bright spot | instrument, media, systems | implemented |
-| `paper` | rotating fiber shapes, gentle drift | oracle, letters, literary fragments | implemented |
-| `stars` | twinkle with parallax depth, slow drift | myth, philosophy, cosmic distance | implemented |
-| `leaves` | polygon leaf shape, vein detail, depth parallax, noise-wind | autumn, nature, change | implemented |
-| `fireflies` | triple-glow, flocking neighbor attraction, mouse interaction | summer nights, quiet wonder | implemented |
+| kind | visual behavior | useful for | pointer | status |
+| --- | --- | --- | --- | --- |
+| `rain` | multi-layer drops (far/mid/near), gust field, splash beads + elliptical ripples, surface glare | windows, memory, night streets | bend | implemented |
+| `storm-rain` | enhanced rain with stronger wind, more impacts, ambient brightness pulse | storms, drama, conflict | bend | implemented |
+| `fog` | low-res volume buffer, 8 elliptical clumps, 2 parallax layers, pointer dissolution via destination-out | uncertainty, quiet books, interiors | dissolve | implemented |
+| `snow` | 3 depth layers, flow field, pointer attract with smooth falloff, damping + speed cap | winter, distance, silence | attract + orbit | implemented |
+| `wind` | 6-point continuous curves, flow field, depth layers, gust | route, travel, exposed landscapes | bend | implemented |
+| `ripple` | elliptical perspective compression, ease-out, inner ring phase offset | water, dreams, memory | spawn-ripple | implemented |
+| `water` | 7-point wave bands, thin highlight strips with screen blend | rivers, lakes, calm water | bend | implemented |
+| `dust` | depth-based alpha, gradient sprite rendering, pointer scatter | archives, old rooms, history | scatter | implemented |
+| `embers` | gradient sprite core + warm halo, screen blend for glow | fireplace, warmth, evening | repel | implemented |
+| `fire` | elliptical flame sprites (heat + flame + core), screen blend | fireplaces, warmth, intensity | illuminate | implemented |
+| `signal` | scanline wobble, noise burst glitches, bright sweep | instrument, media, systems | bend | implemented |
+| `paper` | flat fiber with edge highlight, rotation flip, air resistance | oracle, letters, literary fragments | scatter | implemented |
+| `stars` | gradient sprite core + flare, screen blend for large stars | myth, philosophy, cosmic distance | illuminate | implemented |
+| `leaves` | polygon leaf with front/back flip, air resistance, gust | autumn, nature, change | bend | implemented |
+| `fireflies` | gradient sprite halo + inner + hot core, force-based pointer, flocking | summer nights, quiet wonder | repel | implemented |
 
 > Status lifecycle: `implemented` → `visually approved` (after effect gallery review) → `fixture covered` (after visual fixture test). Do not mark as `visually approved` without a rendered screenshot comparison.
 
@@ -93,11 +93,21 @@ The runtime provides **guide motion presets** per template. Agents select via `e
 
 | preset | template | behavior |
 | --- | --- | --- |
-| `window-fog-clear` | window | particles fall like condensation, window frame draws, glass clears |
-| `vinyl-groove-orbit` | vinyl | groove circles orbit, dust follows, tonearm shadow |
-| `instrument-scan-lock` | instrument | scanlines stabilize, noise collapses, indicator lights pulse |
-| `route-path-light` | route | route line draws forward, station dots glow |
-| `oracle-card-reveal` | oracle | card shadows gather, candle motes, ink/star converge |
+| `window-fog-clear` | window | mist wisps thin with steps, growing light shaft |
+| `window-rain-reveal` | window | diagonal rain traces on glass, reflection edge |
+| `window-light-shaft` | window | expanding diagonal beam with dust motes |
+| `vinyl-needle-descent` | vinyl | concentric grooves activating, needle shadow |
+| `vinyl-groove-resonance` | vinyl | elliptical resonance waves from center |
+| `vinyl-dust-orbit` | vinyl | dust particles orbiting central point |
+| `instrument-signal-lock` | instrument | scanlines stabilizing with lock indicator |
+| `instrument-dial-seek` | instrument | frequency dial sweeping with pointer line |
+| `instrument-device-wake` | instrument | CRT warm-up radial glow |
+| `route-path-draw` | route | path line drawing forward with station dots |
+| `route-distant-lights` | route | light points appearing with glow sprites |
+| `route-map-wind` | route | wind-swept texture lines |
+| `oracle-table-reveal` | oracle | table texture with growing candle glow |
+| `oracle-card-turn` | oracle | card silhouettes rotating per step |
+| `oracle-symbol-bloom` | oracle | expanding ink bloom circles |
 
 Agents select by name in `entryGuide.motion`:
 

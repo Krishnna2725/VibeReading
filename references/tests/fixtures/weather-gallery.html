@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeReading Weather Gallery — Dev Fixture</title>
+  <link rel="stylesheet" href="../../../runtime/v2-runtime.css">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0e14; }
+    .vr-scene { aspect-ratio: unset !important; }
+
+    /* ── Gallery Panel ── */
+    #gp {
+      position: fixed; top: 10px; right: 10px; z-index: 500;
+      background: rgba(10,14,20,0.92); color: #c8ccd4;
+      padding: 14px; border-radius: 8px;
+      font: 12px/1.5 'SF Mono','Cascadia Code',Consolas,monospace;
+      width: 310px; max-height: calc(100vh - 20px); overflow-y: auto;
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    #gp h3 { margin: 0 0 10px; font-size: 13px; color: #58a6ff; letter-spacing: 0.5px; }
+    .gs { margin-bottom: 10px; }
+    .gl { font-size: 10px; color: #6e7681; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .gb { display: flex; flex-wrap: wrap; gap: 3px; }
+    .b {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: #8b949e; padding: 2px 7px; border-radius: 3px; cursor: pointer;
+      font: 10px/1.4 inherit; transition: all 0.15s; white-space: nowrap;
+    }
+    .b:hover { background: rgba(255,255,255,0.1); color: #c8ccd4; }
+    .b.on { background: rgba(88,166,255,0.15); border-color: rgba(88,166,255,0.35); color: #58a6ff; }
+    #gd {
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: #6e7681;
+    }
+    #gd span { color: #c8ccd4; }
+    .gr { display: flex; gap: 6px; align-items: center; margin-bottom: 3px; }
+    .note { font-size: 9px; color: #484f58; margin-top: 6px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <!-- ── Runtime DOM (matches page-shell.html) ── -->
+  <main data-vr-shell class="vr-shell">
+    <section data-vr-scene class="vr-scene" aria-label="Weather display">
+      <div data-vr-scene-underlay class="vr-scene-underlay"></div>
+      <div data-vr-weather class="vr-weather-layer" aria-hidden="true"></div>
+      <div data-vr-atmosphere-slot class="vr-atmosphere-slot" aria-hidden="true"></div>
+      <div data-vr-scene-slot class="vr-scene-slot"></div>
+    </section>
+    <section data-vr-companion-root class="vr-companion-root" aria-label="Controls"></section>
+  </main>
+
+  <section data-vr-guide class="vr-guide" aria-label="Pre-reading guide" hidden>
+    <div data-vr-guide-root class="vr-guide-root"></div>
+  </section>
+
+  <!-- ── Gallery Panel ── -->
+  <div id="gp">
+    <h3>&#9729; Weather Gallery</h3>
+
+    <div class="gs">
+      <div class="gl">Effect</div>
+      <div id="ge" class="gb"></div>
+    </div>
+
+    <div class="gs">
+      <div class="gl">Level</div>
+      <div class="gb" id="gl-btns">
+        <button class="b" data-vr-weather-level="off">off</button>
+        <button class="b on" data-vr-weather-level="medium">medium</button>
+        <button class="b" data-vr-weather-level="high">high</button>
+      </div>
+    </div>
+
+    <div class="gs">
+      <div class="gl">Background</div>
+      <div class="gb" id="gbg">
+        <button class="b" data-bg="light">Light</button>
+        <button class="b on" data-bg="dark">Dark</button>
+        <button class="b" data-bg="image">Image</button>
+      </div>
+    </div>
+
+    <div class="gs">
+      <div class="gl">Options</div>
+      <div class="gb">
+        <button class="b" id="grm">Reduced Motion: Off</button>
+      </div>
+    </div>
+
+    <div id="gd">
+      <div class="gr">Effect: <span id="dk">&#8212;</span></div>
+      <div class="gr">Level: <span id="dl">medium</span></div>
+      <div class="gr">FPS: <span id="df">&#8212;</span></div>
+      <div class="gr">Canvas: <span id="dc">0</span> | Engine: <span id="de">&#8212;</span></div>
+    </div>
+
+    <div class="note">
+      Click effect buttons to switch weather. Guide is hidden for gallery use.<br>
+      Reduced-motion: toggle, then switch effect to apply.
+    </div>
+  </div>
+
+  <!-- ── Load order: p5 → spec → runtime → gallery logic ── -->
+  <script src="../../../runtime/libs/p5.min.js"></script>
+  <script>
+  /* ── Reduced-motion override + spec (must run before runtime) ── */
+  (function() {
+    "use strict";
+    var _origMM = window.matchMedia;
+    window._galleryRM = false;
+    window.matchMedia = function(q) {
+      if (String(q).indexOf("prefers-reduced-motion") !== -1) {
+        var real = _origMM.call(window, q);
+        return {
+          get matches() { return window._galleryRM || real.matches; },
+          media: real.media,
+          addEventListener: real.addEventListener ? real.addEventListener.bind(real) : function() {},
+          removeEventListener: real.removeEventListener ? real.removeEventListener.bind(real) : function() {}
+        };
+      }
+      return _origMM.call(window, q);
+    };
+
+    var KINDS = [
+      "rain","storm-rain","fog","snow","wind",
+      "ripple","water","dust","embers","fire",
+      "signal","paper","stars","leaves","fireflies"
+    ];
+    window.VIBE_READING_SPEC = {
+      book: { title: "Weather Gallery", author: "Dev Fixture" },
+      template: { primary: "window" },
+      entryGuide: { steps: [] },
+      audio: {},
+      stages: KINDS.map(function(k) {
+        return {
+          id: "g-" + k, label: k, sourceRange: "Gallery",
+          chapters: ["dev"], readingHint: k,
+          weather: { kind: k, defaultLevel: "medium" }
+        };
+      })
+    };
+  })();
+  </script>
+  <script src="../../../runtime/v2-runtime.js"></script>
+  <script>
+  /* ── Gallery controls ── */
+  (function() {
+    "use strict";
+    var root = document.documentElement;
+    var wl = document.querySelector("[data-vr-weather]");
+    var scene = document.querySelector("[data-vr-scene]");
+    var KINDS = [
+      "rain","storm-rain","fog","snow","wind",
+      "ripple","water","dust","embers","fire",
+      "signal","paper","stars","leaves","fireflies"
+    ];
+
+    /* Hide guide */
+    var guide = document.querySelector("[data-vr-guide]");
+    if (guide) guide.hidden = true;
+    root.dataset.vrMode = "reading";
+
+    /* Create effect buttons (each has data-vr-stage for runtime click handler) */
+    var ge = document.getElementById("ge");
+    KINDS.forEach(function(kind, i) {
+      var btn = document.createElement("button");
+      btn.className = "b" + (i === 0 ? " on" : "");
+      btn.textContent = kind;
+      btn.dataset.vrStage = String(i);
+      ge.appendChild(btn);
+    });
+
+    /* Update active effect button on stage change */
+    window.addEventListener("vibereading:stage", function(e) {
+      var idx = e.detail.index;
+      ge.querySelectorAll(".b").forEach(function(b, i) {
+        b.classList.toggle("on", i === idx);
+      });
+      document.getElementById("dk").textContent = (e.detail.stage.weather && e.detail.stage.weather.kind) || "—";
+    });
+
+    /* Update active level button on weather change */
+    window.addEventListener("vibereading:weather", function(e) {
+      var lv = e.detail.level;
+      document.getElementById("dl").textContent = lv;
+      document.querySelectorAll("[data-vr-weather-level]").forEach(function(b) {
+        b.classList.toggle("on", b.dataset.vrWeatherLevel === lv);
+      });
+    });
+
+    /* Background switcher */
+    var BGM = {
+      light: "#e8eaed",
+      dark: "#0a0e14",
+      image: "linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 80%, #1a1a2e 100%)"
+    };
+    scene.style.background = BGM.dark;
+    document.getElementById("gbg").addEventListener("click", function(e) {
+      var btn = e.target.closest("[data-bg]");
+      if (!btn) return;
+      scene.style.background = BGM[btn.dataset.bg] || BGM.dark;
+      document.querySelectorAll("#gbg .b").forEach(function(b) { b.classList.remove("on"); });
+      btn.classList.add("on");
+    });
+
+    /* Reduced-motion toggle */
+    document.getElementById("grm").addEventListener("click", function() {
+      window._galleryRM = !window._galleryRM;
+      this.textContent = "Reduced Motion: " + (window._galleryRM ? "On" : "Off");
+      this.classList.toggle("on", window._galleryRM);
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    /* FPS counter */
+    var frames = 0, lastFps = performance.now(), fps = 0;
+    function raf() {
+      frames++;
+      var now = performance.now();
+      if (now - lastFps >= 1000) {
+        fps = Math.round(frames * 1000 / (now - lastFps));
+        frames = 0;
+        lastFps = now;
+      }
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    /* Debug display updater */
+    setInterval(function() {
+      document.getElementById("dk").textContent = (wl && wl.dataset.vrWeatherKind) || "—";
+      document.getElementById("dl").textContent = root.dataset.vrWeatherLevel || "—";
+      document.getElementById("df").textContent = fps || "—";
+      document.getElementById("dc").textContent = wl ? wl.querySelectorAll("canvas").length : 0;
+      document.getElementById("de").textContent = (wl && wl.dataset.vrWeatherEngine) || "—";
+    }, 500);
+  })();
+  </script>
+</body>
+</html>

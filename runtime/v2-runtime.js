@@ -11,10 +11,20 @@
   /* ── Guide motion presets (one per template) ── */
   const GUIDE_MOTION_PRESETS = [
     "window-fog-clear",
-    "vinyl-groove-orbit",
-    "instrument-scan-lock",
-    "route-path-light",
-    "oracle-card-reveal"
+    "window-rain-reveal",
+    "window-light-shaft",
+    "vinyl-needle-descent",
+    "vinyl-groove-resonance",
+    "vinyl-dust-orbit",
+    "instrument-signal-lock",
+    "instrument-dial-seek",
+    "instrument-device-wake",
+    "route-path-draw",
+    "route-distant-lights",
+    "route-map-wind",
+    "oracle-table-reveal",
+    "oracle-card-turn",
+    "oracle-symbol-bloom"
   ];
 
   function normalizeWeatherLevel(level) {
@@ -233,6 +243,297 @@
     };
   }
 
+  /* ──────────────────────────────────────────────────────────
+     FRAME CLOCK — unified dt source, second-precision
+     ────────────────────────────────────────────────────────── */
+  function createFrameClock() {
+    let lastTime = 0, _dt = 0, paused = false;
+    return {
+      get dt() { return _dt; },
+      update(now) {
+        if (paused) { _dt = 0; return; }
+        const raw = lastTime > 0 ? (now - lastTime) / 1000 : 0;
+        _dt = Math.min(0.05, Math.max(0, raw));
+        lastTime = now;
+      },
+      reset() { lastTime = 0; _dt = 0; },
+      pause() { paused = true; _dt = 0; },
+      resume() { paused = false; lastTime = 0; }
+    };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     POINTER TRACKER — smooth coordinates, velocity, idle
+     ────────────────────────────────────────────────────────── */
+  function createPointerTracker() {
+    const s = {
+      rawX: null, rawY: null, x: null, y: null,
+      vx: 0, vy: 0, speed: 0,
+      active: false, idleTime: 999,
+      bounds: { left: 0, top: 0 }
+    };
+    let bound = false, unbindFn = null;
+    function bind(target) {
+      if (bound) return;
+      bound = true;
+      const on = (e) => { s.rawX = e.clientX; s.rawY = e.clientY; s.active = true; s.idleTime = 0; };
+      const off = () => { s.active = false; };
+      target.addEventListener("mousemove", on, { passive: true });
+      target.addEventListener("pointerleave", off, { passive: true });
+      target.addEventListener("blur", off, { passive: true });
+      unbindFn = () => {
+        target.removeEventListener("mousemove", on);
+        target.removeEventListener("pointerleave", off);
+        target.removeEventListener("blur", off);
+        bound = false;
+      };
+    }
+    function update(dt) {
+      s.idleTime += dt;
+      if (s.rawX == null || s.rawY == null) {
+        s.vx *= 0.9; s.vy *= 0.9; s.speed *= 0.9; return;
+      }
+      const nx = s.rawX - s.bounds.left;
+      const ny = s.rawY - s.bounds.top;
+      if (s.x == null) { s.x = nx; s.y = ny; return; }
+      const dx = nx - s.x, dy = ny - s.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 160) { const r = 160 / d; s.x += dx * r; s.y += dy * r; }
+      else { s.x += dx * 0.18; s.y += dy * 0.18; }
+      const tvx = dt > 1e-6 ? dx / dt : 0;
+      const tvy = dt > 1e-6 ? dy / dt : 0;
+      s.vx = s.vx * 0.8 + tvx * 0.2;
+      s.vy = s.vy * 0.8 + tvy * 0.2;
+      s.speed = Math.hypot(s.vx, s.vy);
+    }
+    function updateBounds(b) { s.bounds = b; }
+    function destroy() { if (unbindFn) unbindFn(); }
+    return { state: s, bind, updateBounds, update, destroy };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     POINTER FIELD — force application for weather effects
+     ────────────────────────────────────────────────────────── */
+  function smoothFalloff(dist, radius) {
+    const t = Math.max(0, Math.min(1, 1 - dist / radius));
+    return t * t * (3 - 2 * t);
+  }
+  function applyPointerField(particle, tracker, cfg) {
+    if (!tracker) return null;
+    const ps = tracker.state;
+    if (!ps.active || ps.x == null || ps.idleTime > (cfg.idleCutoff || 0.1)) return null;
+    const dx = ps.x - particle.x, dy = ps.y - particle.y;
+    const dist = Math.hypot(dx, dy) || 1e-4;
+    const radius = cfg.radius || 120;
+    if (dist >= radius) return null;
+    const k = smoothFalloff(dist, radius) * (cfg.strength || 1);
+    const nx = dx / dist, ny = dy / dist;
+    switch (cfg.mode) {
+      case "attract": particle.vx += nx * k; particle.vy += ny * k; break;
+      case "repel": particle.vx -= nx * k; particle.vy -= ny * k; break;
+      case "orbit": particle.vx += -ny * k * 0.8; particle.vy += nx * k * 0.8; break;
+      case "bend": particle.vx += ps.vx * 0.0005 * k; particle.vy += ps.vy * 0.0005 * k; break;
+      case "scatter":
+        particle.vx -= nx * k * (1 + Math.min(ps.speed / 1200, 1));
+        particle.vy -= ny * k * (1 + Math.min(ps.speed / 1200, 1));
+        break;
+      case "illuminate": particle.pointerGlow = Math.max(particle.pointerGlow || 0, k); break;
+      case "dissolve": particle.pointerErase = Math.max(particle.pointerErase || 0, k); break;
+      case "spawn-ripple": return { type: "ripple", x: ps.x, y: ps.y, power: k };
+    }
+    return null;
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     PARTICLE POOL — fixed-capacity pre-allocated pool
+     ────────────────────────────────────────────────────────── */
+  function createParticlePool(maxSize) {
+    const items = [], free = [];
+    for (let i = 0; i < maxSize; i++) { items.push({ active: false }); free.push(i); }
+    return {
+      spawn(init) {
+        if (!free.length) return null;
+        const i = free.pop(), p = items[i];
+        p.active = true; p._i = i; init(p); return p;
+      },
+      deactivate(p) { if (p && p.active) { p.active = false; free.push(p._i); } },
+      forEach(fn) { for (let i = 0; i < items.length; i++) { if (items[i].active) fn(items[i], i); } },
+      count() { return items.length - free.length; },
+      clear() {
+        for (const p of items) p.active = false;
+        free.length = 0;
+        for (let i = 0; i < maxSize; i++) free.push(i);
+      }
+    };
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     GRADIENT SPRITE CACHE — cached radial gradients
+     ────────────────────────────────────────────────────────── */
+  function createGradientSpriteCache(p) {
+    const cache = new Map();
+    const MAX = 64;
+    function makeKey(o) {
+      /* Quantize alpha to 0.1 steps so fade-outs get distinct sprites */
+      const qa = Math.round((o.alpha || 1) * 10) / 10;
+      return [
+        Math.round(o.radius), (o.color || [255, 255, 255]).join(","),
+        o.shape || "r", o.innerStop || 0, o.midStop || 0.45, o.outerStop || 1,
+        o.blur || 0, qa
+      ].join(":");
+    }
+    function radial(o) {
+      const k = makeKey(o);
+      if (cache.has(k)) return cache.get(k);
+      if (cache.size >= MAX) {
+        const fk = cache.keys().next().value;
+        const old = cache.get(fk);
+        if (old && old.remove) old.remove();
+        cache.delete(fk);
+      }
+      const {
+        radius = 64, color = [255, 255, 255], alpha = 1,
+        innerStop = 0, midStop = 0.45, outerStop = 1,
+        innerAlpha = 1, midAlpha = 0.18, outerAlpha = 0,
+        blur = 0, shape = "r"
+      } = o;
+      const pad = blur * 2;
+      const size = Math.ceil(radius * 2 + pad * 2);
+      const pg = p.createGraphics(size, size);
+      const ctx = pg.drawingContext;
+      pg.clear();
+      if (blur > 0) try { ctx.filter = "blur(" + blur + "px)"; } catch (e) { /* ignore */ }
+      const cx = size / 2, cy = size / 2;
+      const g = ctx.createRadialGradient(cx, cy, radius * innerStop, cx, cy, radius * outerStop);
+      const cr = color[0], cg = color[1], cb = color[2];
+      g.addColorStop(0, "rgba(" + cr + "," + cg + "," + cb + "," + (innerAlpha * alpha) + ")");
+      g.addColorStop(Math.min(0.999, midStop), "rgba(" + cr + "," + cg + "," + cb + "," + (midAlpha * alpha) + ")");
+      g.addColorStop(1, "rgba(" + cr + "," + cg + "," + cb + "," + (outerAlpha * alpha) + ")");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      if (shape === "e") ctx.ellipse(cx, cy, radius, radius * 0.6, 0, 0, Math.PI * 2);
+      else ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      try { ctx.filter = "none"; } catch (e) { /* ignore */ }
+      cache.set(k, pg);
+      return pg;
+    }
+    function draw(sprite, x, y, w, h, mode, alpha) {
+      if (!sprite) return;
+      const ctx = p.drawingContext;
+      ctx.save();
+      ctx.globalCompositeOperation = mode || "source-over";
+      ctx.globalAlpha = (alpha != null ? alpha : 255) / 255;
+      p.image(sprite, x - w / 2, y - h / 2, w, h != null ? h : w);
+      ctx.restore();
+    }
+    function destroy() {
+      cache.forEach(function (pg) { if (pg && pg.remove) pg.remove(); });
+      cache.clear();
+    }
+    return { radial, draw, destroy, get size() { return cache.size; } };
+  }
+
+  /* ── Mouse glow using gradient sprite ── */
+  function drawMouseGlow(p, tracker, cache) {
+    if (!tracker || !cache) return;
+    const s = tracker.state;
+    if (!s.active || s.x == null || s.y == null) return;
+    const idleFade = Math.max(0, 1 - s.idleTime * 0.6);
+    if (idleFade <= 0) return;
+    const sz = Math.min(p.width, p.height) * 0.18;
+    const sprite = cache.radial({
+      radius: 64, color: [255, 240, 200], alpha: 0.09 * idleFade,
+      midAlpha: 0.025, midStop: 0.5, outerAlpha: 0
+    });
+    cache.draw(sprite, s.x, s.y, sz, sz, "screen", 255);
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     INTENSITY PROFILES — per-weather medium/high semantics
+     ────────────────────────────────────────────────────────── */
+  const INTENSITY_PROFILES = {
+    rain: {
+      off: { spawnScale: 0, gust: 0, impacts: 0, nearWeight: 0, glare: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1, gust: 0.8, impacts: 0.6, nearWeight: 0.8, glare: 0.25, turbulence: 0.5, pointerStrength: 0.6 },
+      high: { spawnScale: 1.2, gust: 1.4, impacts: 1.0, nearWeight: 1.3, glare: 0.6, turbulence: 0.8, pointerStrength: 0.8 }
+    },
+    "storm-rain": {
+      off: { spawnScale: 0, gust: 0, impacts: 0, nearWeight: 0, glare: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1.3, gust: 1.5, impacts: 0.8, nearWeight: 1.0, glare: 0.35, turbulence: 0.7, pointerStrength: 0.5 },
+      high: { spawnScale: 1.6, gust: 2.2, impacts: 1.2, nearWeight: 1.5, glare: 0.7, turbulence: 1.0, pointerStrength: 0.6 }
+    },
+    fog: {
+      off: { coverage: 0, speed: 0, parallax: 0, erase: 0, turbulence: 0, pointerStrength: 0 },
+      medium: { coverage: 0.55, speed: 0.8, parallax: 1.0, erase: 0.35, turbulence: 0.3, pointerStrength: 0.4 },
+      high: { coverage: 0.78, speed: 1.0, parallax: 1.25, erase: 0.55, turbulence: 0.5, pointerStrength: 0.55 }
+    },
+    snow: {
+      off: { spawnScale: 0, flowAmp: 0, pointer: 0, nearWeight: 0, swirl: 0, turbulence: 0 },
+      medium: { spawnScale: 1, flowAmp: 0.8, pointer: 0.55, nearWeight: 0.8, swirl: 0.25, turbulence: 0.3 },
+      high: { spawnScale: 1.15, flowAmp: 1.2, pointer: 0.8, nearWeight: 1.1, swirl: 0.55, turbulence: 0.5 }
+    },
+    wind: {
+      off: { spawnScale: 0, gustAmp: 0, pointerStrength: 0, turbulence: 0 },
+      medium: { spawnScale: 1, gustAmp: 0.8, pointerStrength: 0.6, turbulence: 0.4 },
+      high: { spawnScale: 1.2, gustAmp: 1.3, pointerStrength: 0.8, turbulence: 0.7 }
+    },
+    ripple: {
+      off: { spawnScale: 0, pointerStrength: 0, eventRate: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, eventRate: 0.6 },
+      high: { spawnScale: 1.1, pointerStrength: 0.7, eventRate: 1.0 }
+    },
+    water: {
+      off: { spawnScale: 0, pointerStrength: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.4, turbulence: 0.3 },
+      high: { spawnScale: 1.1, pointerStrength: 0.6, turbulence: 0.5 }
+    },
+    dust: {
+      off: { spawnScale: 0, pointerStrength: 0, visibility: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, visibility: 0.6, turbulence: 0.3 },
+      high: { spawnScale: 1.15, pointerStrength: 0.5, visibility: 0.8, turbulence: 0.5 }
+    },
+    embers: {
+      off: { spawnScale: 0, pointerStrength: 0, reignite: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, reignite: 0.15, turbulence: 0.4 },
+      high: { spawnScale: 1.2, pointerStrength: 0.4, reignite: 0.3, turbulence: 0.6 }
+    },
+    fire: {
+      off: { spawnScale: 0, pointerStrength: 0, height: 0, turbulence: 0, emberBurst: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.3, height: 1, turbulence: 0.5, emberBurst: 0.2 },
+      high: { spawnScale: 1.15, pointerStrength: 0.4, height: 1.3, turbulence: 0.8, emberBurst: 0.5 }
+    },
+    signal: {
+      off: { spawnScale: 0, noiseBurst: 0, stability: 0 },
+      medium: { spawnScale: 1, noiseBurst: 0.3, stability: 0.7 },
+      high: { spawnScale: 1.1, noiseBurst: 0.6, stability: 0.4 }
+    },
+    paper: {
+      off: { spawnScale: 0, pointerStrength: 0, tumble: 0, turbulence: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, tumble: 0.6, turbulence: 0.3 },
+      high: { spawnScale: 1.15, pointerStrength: 0.7, tumble: 0.9, turbulence: 0.5 }
+    },
+    stars: {
+      off: { spawnScale: 0, twinkle: 0, flareChance: 0, pointerStrength: 0 },
+      medium: { spawnScale: 1, twinkle: 0.6, flareChance: 0.08, pointerStrength: 0.2 },
+      high: { spawnScale: 1.1, twinkle: 0.8, flareChance: 0.15, pointerStrength: 0.3 }
+    },
+    leaves: {
+      off: { spawnScale: 0, pointerStrength: 0, gustAmp: 0, tumble: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.5, gustAmp: 0.7, tumble: 0.6 },
+      high: { spawnScale: 1.15, pointerStrength: 0.7, gustAmp: 1.1, tumble: 0.9 }
+    },
+    fireflies: {
+      off: { spawnScale: 0, pointerStrength: 0, flockWeight: 0, breathe: 0 },
+      medium: { spawnScale: 1, pointerStrength: 0.4, flockWeight: 0.3, breathe: 0.6 },
+      high: { spawnScale: 1.1, pointerStrength: 0.55, flockWeight: 0.5, breathe: 0.8 }
+    }
+  };
+  function getIntensityProfile(kind, level) {
+    const p = INTENSITY_PROFILES[kind] || INTENSITY_PROFILES.dust;
+    return p[level] || p.medium;
+  }
+
   function init() {
     const spec = window.VIBE_READING_SPEC;
     if (!spec) {
@@ -284,9 +585,19 @@
     if (bookTitle) bookTitle.textContent = spec.book?.title || (isChinese ? "开始阅读" : "Start Reading");
     root.dataset.vrTemplate = templateId;
 
-    /* Resolve guide motion preset */
+    /* Resolve guide motion preset — map old names to new ones */
+    const OLD_PRESET_MAP = {
+      "vinyl-groove-orbit": "vinyl-groove-resonance",
+      "instrument-scan-lock": "instrument-signal-lock",
+      "route-path-light": "route-path-draw",
+      "oracle-card-reveal": "oracle-table-reveal"
+    };
     const rawMotion = String(spec.entryGuide?.motion || spec.entryGuide?.layout || templateId).toLowerCase();
-    const guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion.includes(p.split("-")[0])) || rawMotion;
+    /* Exact match first, then fall back to prefix match */
+    let guideMotion = GUIDE_MOTION_PRESETS.find((p) => rawMotion === p)
+      || GUIDE_MOTION_PRESETS.find((p) => rawMotion === p.split("-").slice(0, -1).join("-"))
+      || rawMotion;
+    if (OLD_PRESET_MAP[guideMotion]) guideMotion = OLD_PRESET_MAP[guideMotion];
     root.dataset.vrGuideMotion = guideMotion;
 
     let guideTimers = [];
@@ -375,162 +686,682 @@
        ────────────────────────────────────────────────────────── */
     const VIBE_EFFECTS = {
       rain: {
-        count: 78, color: [210, 225, 235], gravity: 7.5,
-        draw(p, particle, profile, reduceMotion) {
-          const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 120);
-          p.strokeWeight(1);
-          p.line(particle.x, particle.y, particle.x + particle.vx * 1.6, particle.y + particle.size);
-          if (particle.splash > 0) {
-            p.noFill();
-            p.stroke(r, g, b, particle.splash * 70);
-            p.ellipse(particle.x, p.height - 8, particle.splash * 32, particle.splash * 8);
-            particle.splash *= 0.78;
+        count: 160, color: [210, 225, 235], gravity: 7.5,
+        setup(p) {
+          p._rainSplashes = createParticlePool(80);
+          p._rainRipples = createParticlePool(40);
+          p._rainGustPhase = Math.random() * 1000;
+        },
+        initParticle(w, h) {
+          const r = Math.random();
+          const depth = r < 0.4 ? 0.45 : r < 0.85 ? 1.0 : 1.4;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (-0.35 - Math.random() * 0.45) * depth,
+            vy: (8 + Math.random() * 8) * depth,
+            size: depth, depth, life: Math.random() * 100,
+            len: 0, active: true
+          };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("rain", lvl);
+          /* Update splash physics */
+          const splash = p._rainSplashes;
+          if (splash) splash.forEach(function (s) {
+            s.vy += 0.12; s.x += s.vx; s.y += s.vy;
+            s.life -= dt;
+            if (s.life <= 0) splash.deactivate(s);
+          });
+          /* Update ripple lifecycle */
+          const ripples = p._rainRipples;
+          if (ripples) ripples.forEach(function (r) {
+            r.life += dt;
+            if (r.life > r.maxLife) ripples.deactivate(r);
+          });
+          /* Update drop physics */
+          if (!reduceMotion) {
+            p._rainGustPhase = (p._rainGustPhase || 0) + 0.006;
+            const gustX = Math.sin(p._rainGustPhase) * 0.4 * profile.gust;
+            for (let i = 0; i < particles.length; i++) {
+              const d = particles[i];
+              if (!d.active) continue;
+              applyPointerField(d, p._pointer, { mode: "bend", radius: 140, strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1 });
+              d.vx += gustX * 0.02;
+              d.vy += 0.10;
+              d.x += d.vx;
+              d.y += d.vy;
+              d.len = d.vy * (0.9 + d.depth * 0.55);
+              if (d.y >= p.height - 10) {
+                const x = d.x;
+                if (splash && Math.random() < profile.impacts) {
+                  for (let b = 0; b < 2 + (Math.random() < 0.5 ? 1 : 0); b++) {
+                    splash.spawn(function (s) {
+                      s.x = x; s.y = p.height - 10;
+                      s.vx = (Math.random() - 0.5) * 1.8;
+                      s.vy = -(1.2 + Math.random() * 1.5);
+                      s.life = 0.25 + Math.random() * 0.28;
+                      s.maxLife = s.life;
+                      s.size = 1 + Math.random() * 1.3;
+                    });
+                  }
+                  if (ripples) ripples.spawn(function (r) {
+                    r.x = x; r.y = p.height - 10;
+                    r.life = 0; r.maxLife = 0.9 + Math.random() * 0.6;
+                    r.rx = 6 + Math.random() * 8;
+                    r.ry = r.rx * 0.28;
+                  });
+                }
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.25;
+                d.vx = (-0.35 - Math.random() * 0.45) * d.depth;
+                d.vy = (8 + Math.random() * 8) * d.depth;
+              }
+              if (d.y > p.height + 20 || d.x < -40 || d.x > p.width + 40) {
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.25;
+              }
+            }
+          }
+          /* Draw drops by depth layer */
+          for (let i = 0; i < particles.length; i++) {
+            const d = particles[i];
+            if (!d.active) continue;
+            const a = d.depth > 1.2 ? 110 : d.depth < 0.7 ? 42 : 72;
+            const w = d.depth > 1.2 ? 1.5 : 0.8;
+            p.stroke(cr, cg, cb, a);
+            p.strokeWeight(w);
+            p.line(d.x, d.y, d.x + d.vx * 1.6, d.y + d.len);
+          }
+          /* Draw splash beads */
+          p.noStroke();
+          if (splash) splash.forEach(function (s) {
+            const a = Math.min(1, s.life * 3) * 180;
+            const sz = s.size * (0.6 + (1 - s.life / s.maxLife) * 0.4) * 10;
+            p.fill(cr, cg, cb, a * 0.5);
+            p.circle(s.x, s.y, sz);
+          });
+          /* Draw elliptical ripples */
+          p.noFill();
+          p.strokeWeight(0.9);
+          if (ripples) ripples.forEach(function (r) {
+            const t = r.life / r.maxLife;
+            const e = 1 - (1 - t) * (1 - t); /* easeOut */
+            const rx = r.rx + e * 16;
+            const ry = r.ry + e * 5;
+            p.stroke(cr, cg, cb, (1 - t) * 90);
+            p.ellipse(r.x, r.y, rx * 2, ry * 2);
+          });
+          /* Surface glare for high */
+          if (profile.glare > 0 && !reduceMotion) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(220, 230, 240, 12 * profile.glare);
+            p.rect(0, p.height - 26, p.width, 26);
+            ctx.restore();
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; }
-          if (particle.y + particle.size >= p.height - 4) {
-            particle.splash = 1;
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("rain", lvl);
+          /* Gust field — low-frequency wind */
+          p._rainGustPhase = (p._rainGustPhase || 0) + 0.006;
+          const gustX = Math.sin(p._rainGustPhase) * 0.4 * profile.gust;
+          const gustY = Math.cos(p._rainGustPhase * 0.7) * 0.1;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 140, strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1
+          });
+          /* Physics */
+          particle.vx += gustX * 0.02;
+          particle.vy += 0.10 + gustY;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.len = particle.vy * (0.9 + particle.depth * 0.55);
+          /* Ground impact */
+          if (particle.y >= p.height - 10) {
+            const x = particle.x;
+            const y = p.height - 10;
+            if (Math.random() < profile.impacts) {
+              /* Spawn splash beads */
+              const splash = p._rainSplashes;
+              if (splash) {
+                const beadCount = 2 + (Math.random() < 0.5 ? 1 : 0);
+                for (let b = 0; b < beadCount; b++) {
+                  splash.spawn(function (s) {
+                    s.x = x; s.y = y;
+                    s.vx = (Math.random() - 0.5) * 1.8;
+                    s.vy = -(1.2 + Math.random() * 1.5);
+                    s.life = 0.25 + Math.random() * 0.28;
+                    s.maxLife = s.life;
+                    s.size = 1 + Math.random() * 1.3;
+                  });
+                }
+              }
+              /* Spawn elliptical ripple */
+              const ripples = p._rainRipples;
+              if (ripples) ripples.spawn(function (r) {
+                r.x = x; r.y = y;
+                r.life = 0; r.maxLife = 0.9 + Math.random() * 0.6;
+                r.rx = 6 + Math.random() * 8;
+                r.ry = r.rx * 0.28;
+              });
+            }
+            /* Respawn drop at top */
             particle.x = Math.random() * p.width;
-            particle.y = -30;
-          } else if (particle.y > p.height + particle.size || particle.x > p.width + particle.size || particle.x < -particle.size * 1.4) {
+            particle.y = -20 - Math.random() * p.height * 0.25;
+            particle.vx = (-0.35 - Math.random() * 0.45) * particle.depth;
+            particle.vy = (8 + Math.random() * 8) * particle.depth;
+          }
+          /* Off-screen respawn */
+          if (particle.y > p.height + 20 || particle.x < -40 || particle.x > p.width + 40) {
             particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
-            particle.vx = -0.8 + Math.random() * 0.9;
-            particle.vy = 7 + Math.random() * 7;
+            particle.y = -20 - Math.random() * p.height * 0.25;
           }
         },
-        initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: -0.8 + Math.random() * 0.9, vy: 7 + Math.random() * 7, size: 10 + Math.random() * 24, life: Math.random() * 100, splash: 0 };
-        }
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       "storm-rain": {
-        count: 120, color: [180, 195, 210], gravity: 9.5, windX: -2.5,
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 100);
-          p.strokeWeight(1.5);
-          p.line(particle.x, particle.y, particle.x + particle.vx * 2.2, particle.y + particle.size * 1.2);
-          if (particle.splash > 0) {
-            p.noFill();
-            p.stroke(r, g, b, particle.splash * 55);
-            p.ellipse(particle.x, p.height - 6, particle.splash * 40, particle.splash * 10);
-            particle.splash *= 0.82;
+        count: 200, color: [180, 195, 210], gravity: 9.5, windX: -2.5,
+        setup(p) {
+          p._rainSplashes = createParticlePool(100);
+          p._rainRipples = createParticlePool(50);
+          p._rainGustPhase = Math.random() * 1000;
+          p._stormPulseTime = 0;
+          p._stormPulseActive = false;
+        },
+        initParticle(w, h) {
+          const r = Math.random();
+          const depth = r < 0.35 ? 0.45 : r < 0.8 ? 1.0 : 1.5;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (-2.5 - Math.random() * 1.2) * depth,
+            vy: (9 + Math.random() * 7) * depth,
+            size: depth, depth, life: Math.random() * 100,
+            len: 0, active: true
+          };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("storm-rain", lvl);
+          /* Update splash physics */
+          const splash = p._rainSplashes;
+          if (splash) splash.forEach(function (s) {
+            s.vy += 0.14; s.x += s.vx; s.y += s.vy;
+            s.life -= dt;
+            if (s.life <= 0) splash.deactivate(s);
+          });
+          /* Update ripple lifecycle */
+          const ripples = p._rainRipples;
+          if (ripples) ripples.forEach(function (r) {
+            r.life += dt;
+            if (r.life > r.maxLife) ripples.deactivate(r);
+          });
+          /* Update drop physics */
+          if (!reduceMotion) {
+            p._rainGustPhase = (p._rainGustPhase || 0) + 0.008;
+            const gustX = Math.sin(p._rainGustPhase) * 0.7 * profile.gust;
+            for (let i = 0; i < particles.length; i++) {
+              const d = particles[i];
+              if (!d.active) continue;
+              applyPointerField(d, p._pointer, { mode: "bend", radius: 140, strength: 0.5 * profile.pointerStrength, idleCutoff: 0.1 });
+              d.vx += gustX * 0.03;
+              d.vy += 0.14;
+              d.x += d.vx;
+              d.y += d.vy;
+              d.len = d.vy * (0.9 + d.depth * 0.6);
+              if (d.y >= p.height - 10) {
+                const x = d.x;
+                if (splash && Math.random() < profile.impacts) {
+                  for (let b = 0; b < 2 + (Math.random() < 0.6 ? 1 : 0); b++) {
+                    splash.spawn(function (s) {
+                      s.x = x; s.y = p.height - 10;
+                      s.vx = (Math.random() - 0.5) * 2.2;
+                      s.vy = -(1.5 + Math.random() * 1.8);
+                      s.life = 0.2 + Math.random() * 0.25;
+                      s.maxLife = s.life;
+                      s.size = 1 + Math.random() * 1.5;
+                    });
+                  }
+                  if (ripples) ripples.spawn(function (r) {
+                    r.x = x; r.y = p.height - 10;
+                    r.life = 0; r.maxLife = 0.8 + Math.random() * 0.5;
+                    r.rx = 8 + Math.random() * 10;
+                    r.ry = r.rx * 0.25;
+                  });
+                }
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.3;
+                d.vx = (-2.5 - Math.random() * 1.2) * d.depth;
+                d.vy = (9 + Math.random() * 7) * d.depth;
+              }
+              if (d.y > p.height + 20 || d.x < -60) {
+                d.x = Math.random() * p.width;
+                d.y = -20 - Math.random() * p.height * 0.3;
+              }
+            }
+          }
+          /* Draw drops */
+          for (let i = 0; i < particles.length; i++) {
+            const d = particles[i];
+            if (!d.active) continue;
+            const a = d.depth > 1.2 ? 100 : d.depth < 0.7 ? 38 : 68;
+            const w = d.depth > 1.2 ? 1.8 : 0.9;
+            p.stroke(cr, cg, cb, a);
+            p.strokeWeight(w);
+            p.line(d.x, d.y, d.x + d.vx * 2.2, d.y + d.len * 1.2);
+          }
+          /* Draw splashes */
+          p.noStroke();
+          if (splash) splash.forEach(function (s) {
+            const a = Math.min(1, s.life * 3) * 160;
+            const sz = s.size * (0.6 + (1 - s.life / s.maxLife) * 0.4) * 12;
+            p.fill(cr, cg, cb, a * 0.5);
+            p.circle(s.x, s.y, sz);
+          });
+          /* Draw ripples */
+          p.noFill();
+          p.strokeWeight(1.0);
+          if (ripples) ripples.forEach(function (r) {
+            const t = r.life / r.maxLife;
+            const e = 1 - (1 - t) * (1 - t);
+            const rx = r.rx + e * 18;
+            const ry = r.ry + e * 6;
+            p.stroke(cr, cg, cb, (1 - t) * 80);
+            p.ellipse(r.x, r.y, rx * 2, ry * 2);
+          });
+          /* Ambient brightness pulse (every 8-20s, 1-3 frames) */
+          if (!reduceMotion && profile.glare > 0.3) {
+            p._stormPulseTime = (p._stormPulseTime || 0) + dt;
+            if (p._stormPulseTime > 8 + Math.random() * 12) {
+              p._stormPulseActive = true;
+              p._stormPulseTime = 0;
+              p._stormPulseFrames = 0;
+            }
+            if (p._stormPulseActive) {
+              p._stormPulseFrames = (p._stormPulseFrames || 0) + 1;
+              const pulseA = Math.max(0, 1 - p._stormPulseFrames / 3) * 15 * profile.glare;
+              const ctx = p.drawingContext;
+              ctx.save();
+              ctx.globalCompositeOperation = "screen";
+              p.noStroke();
+              p.fill(200, 210, 230, pulseA);
+              p.rect(0, 0, p.width, p.height);
+              ctx.restore();
+              if (p._stormPulseFrames > 3) p._stormPulseActive = false;
+            }
+          }
+          /* Surface glare */
+          if (profile.glare > 0) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(200, 215, 235, 15 * profile.glare);
+            p.rect(0, p.height - 30, p.width, 30);
+            ctx.restore();
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; }
-          if (particle.y + particle.size >= p.height - 4) {
-            particle.splash = 1;
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("storm-rain", lvl);
+          /* Stronger gust */
+          p._rainGustPhase = (p._rainGustPhase || 0) + 0.008;
+          const gustX = Math.sin(p._rainGustPhase) * 0.7 * profile.gust;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 140, strength: 0.5 * profile.pointerStrength, idleCutoff: 0.1
+          });
+          /* Physics */
+          particle.vx += gustX * 0.03;
+          particle.vy += 0.14;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.len = particle.vy * (0.9 + particle.depth * 0.6);
+          /* Ground impact */
+          if (particle.y >= p.height - 10) {
+            const x = particle.x;
+            const splash = p._rainSplashes;
+            const ripples = p._rainRipples;
+            if (Math.random() < profile.impacts) {
+              if (splash) {
+                const beadCount = 2 + (Math.random() < 0.6 ? 1 : 0);
+                for (let b = 0; b < beadCount; b++) {
+                  splash.spawn(function (s) {
+                    s.x = x; s.y = p.height - 10;
+                    s.vx = (Math.random() - 0.5) * 2.2;
+                    s.vy = -(1.5 + Math.random() * 1.8);
+                    s.life = 0.2 + Math.random() * 0.25;
+                    s.maxLife = s.life;
+                    s.size = 1 + Math.random() * 1.5;
+                  });
+                }
+              }
+              if (ripples) ripples.spawn(function (r) {
+                r.x = x; r.y = p.height - 10;
+                r.life = 0; r.maxLife = 0.8 + Math.random() * 0.5;
+                r.rx = 8 + Math.random() * 10;
+                r.ry = r.rx * 0.25;
+              });
+            }
+            /* Respawn */
             particle.x = Math.random() * p.width;
-            particle.y = -30;
-          } else if (particle.y > p.height + particle.size || particle.x < -particle.size * 2) {
+            particle.y = -20 - Math.random() * p.height * 0.3;
+            particle.vx = (-2.5 - Math.random() * 1.2) * particle.depth;
+            particle.vy = (9 + Math.random() * 7) * particle.depth;
+          }
+          if (particle.y > p.height + 20 || particle.x < -60) {
             particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
+            particle.y = -20 - Math.random() * p.height * 0.3;
           }
         },
-        initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: -2.5 + Math.random() * 1.2, vy: 9 + Math.random() * 7, size: 14 + Math.random() * 28, life: Math.random() * 100, splash: 0 };
-        }
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       fog: {
-        count: 16, color: [210, 222, 222], gravity: 0.18, drift: 0.55, mist: true,
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          const alpha = 6 + Math.sin(particle.life * 0.01 + particle.seed) * 3;
-          p.noStroke();
-          // Multi-layer fog for depth
-          for (let layer = 3; layer > 0; layer--) {
-            p.fill(r, g, b, alpha * (layer / 3));
-            p.circle(particle.x, particle.y, particle.size * (layer * 0.6));
+        count: 8, color: [210, 222, 222], gravity: 0.18, drift: 0.55, mist: true,
+        setup(p) {
+          /* Clean up old buffer if rebuilding */
+          if (p._fogBuffer && p._fogBuffer.remove) p._fogBuffer.remove();
+          /* Create low-res fog buffer */
+          const bw = Math.round(p.width * 0.3);
+          const bh = Math.round(p.height * 0.3);
+          p._fogBuffer = p.createGraphics(bw, bh);
+          p._fogClumps = [];
+          const numClumps = 8;
+          for (let i = 0; i < numClumps; i++) {
+            p._fogClumps.push({
+              x: Math.random(), y: Math.random(),
+              vx: (Math.random() - 0.5) * 0.0015,
+              vy: (Math.random() - 0.5) * 0.0008,
+              rx: 0.22 + Math.random() * 0.18,
+              ry: 0.12 + Math.random() * 0.14,
+              phase: Math.random() * Math.PI * 2,
+              layer: i < numClumps / 2 ? 0 : 1 /* 0=far, 1=near */
+            });
           }
-        },
-        tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based drift
-            const driftX = p.noise(particle.life * 0.003, particle.seed) * 1.5 - 0.75;
-            const driftY = p.noise(particle.seed + 400, particle.life * 0.002) * 0.4 - 0.2;
-            particle.x += driftX;
-            particle.y += driftY;
-            particle.life += 1;
-          }
-          if (particle.x > p.width + particle.size || particle.x < -particle.size) {
-            particle.x = -p.width * 0.2 + Math.random() * p.width * 0.3;
-            particle.y = Math.random() * p.height;
-          }
+          p._fogRecovery = 0;
         },
         initParticle(w, h) {
-          return { x: -w * 0.2 + Math.random() * w * 1.4, y: Math.random() * h, vx: 0.12, vy: 0, size: 80 + Math.random() * 220, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
-        }
+          /* Particles not used for fog — drawAll manages clumps */
+          return { x: 0, y: 0, vx: 0, vy: 0, size: 1, life: 0, active: false };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("fog", lvl);
+          const pg = p._fogBuffer;
+          if (!pg) return;
+          const ctx = pg.drawingContext;
+          const clumps = p._fogClumps;
+          if (!clumps) return;
+          /* Update clumps */
+          const speed = profile.speed;
+          const parallax = profile.parallax;
+          for (let i = 0; i < clumps.length; i++) {
+            const c = clumps[i];
+            c.x += c.vx * speed;
+            c.y += c.vy * speed;
+            c.phase += dt * 0.12;
+            if (c.x < -0.25) c.x = 1.25;
+            if (c.x > 1.25) c.x = -0.25;
+            if (c.y < -0.25) c.y = 1.25;
+            if (c.y > 1.25) c.y = -0.25;
+          }
+          /* Draw to low-res buffer */
+          pg.clear();
+          for (let i = 0; i < clumps.length; i++) {
+            const c = clumps[i];
+            const depthScale = c.layer === 0 ? 0.7 * parallax : 1.0;
+            const x = c.x * pg.width;
+            const y = c.y * pg.height;
+            const w = pg.width * c.rx * depthScale * (1 + Math.sin(c.phase) * 0.08);
+            const h = pg.height * c.ry * depthScale * (1 + Math.cos(c.phase * 0.8) * 0.08);
+            const alpha = (0.25 + c.layer * 0.1) * profile.coverage;
+            /* Draw elliptical gradient clump using cached sprite */
+            const cache = p._cache;
+            if (cache) {
+              const sprite = cache.radial({
+                radius: 80, color: [cr, cg, cb], alpha: alpha,
+                midAlpha: 0.08, midStop: 0.4, outerAlpha: 0, shape: "e"
+              });
+              ctx.save();
+              ctx.globalCompositeOperation = "source-over";
+              pg.image(sprite, x - w * 0.5, y - h * 0.5, w, h);
+              ctx.restore();
+            } else {
+              pg.noStroke();
+              pg.fill(cr, cg, cb, alpha * 255);
+              pg.ellipse(x, y, w, h);
+            }
+          }
+          /* Pointer dissolution */
+          const pointer = p._pointer;
+          const ps = pointer && pointer.state;
+          if (ps && ps.active && ps.x != null && ps.y != null && profile.erase > 0) {
+            const px = ps.x / p.width * pg.width;
+            const py = ps.y / p.height * pg.height;
+            const eraseRadius = 40 + Math.min(ps.speed * 0.02, 30);
+            ctx.save();
+            ctx.globalCompositeOperation = "destination-out";
+            const g = ctx.createRadialGradient(px, py, 0, px, py, eraseRadius);
+            g.addColorStop(0, "rgba(0,0,0," + (0.08 * profile.erase) + ")");
+            g.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(px, py, eraseRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            p._fogRecovery = 1;
+          } else if (p._fogRecovery > 0) {
+            /* Smooth recovery: slowly redraw clumps */
+            p._fogRecovery = Math.max(0, p._fogRecovery - dt * 0.4);
+          }
+          /* Upsample to main canvas with image smoothing */
+          const mainCtx = p.drawingContext;
+          mainCtx.save();
+          mainCtx.imageSmoothingEnabled = true;
+          mainCtx.globalCompositeOperation = "source-over";
+          p.image(pg, 0, 0, p.width, p.height);
+          mainCtx.restore();
+        },
+        tick(particle, p, reduceMotion) { /* drawAll handles all updates */ },
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
       },
 
       snow: {
-        count: 56, color: [245, 246, 238], gravity: 1.2, drift: 0.9,
-        draw(p, particle, profile) {
-          const [r, g, b] = profile.color;
-          const alpha = 80 + Math.sin(particle.life * 0.02 + particle.seed) * 35;
-          p.noStroke();
-          // Outer glow for depth
-          p.fill(r, g, b, alpha * 0.3);
-          p.circle(particle.x, particle.y, particle.size * 4);
-          // Core
-          p.fill(r, g, b, alpha);
-          p.circle(particle.x, particle.y, particle.size * 2);
-        },
-        tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based wind drift instead of simple random
-            const windX = p.noise(particle.life * 0.006, particle.seed) * 2 - 1;
-            const windY = p.noise(particle.seed + 200, particle.life * 0.004) * 0.5;
-            particle.x += particle.vx + windX * 0.8;
-            particle.y += particle.vy + windY;
-            particle.life += 1;
-          }
-          if (particle.y > p.height + particle.size) {
-            particle.x = Math.random() * p.width;
-            particle.y = -particle.size;
-          }
+        count: 180, color: [245, 246, 238], gravity: 1.2, drift: 0.9,
+        setup(p) {
+          /* Ground snow heightmap: one value per 4px of screen width */
+          const slots = Math.ceil(p.width / 4);
+          p._snowGround = new Float32Array(slots);
+          p._snowGroundW = 4;
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.6, vy: 1.2 * (0.3 + Math.random() * 0.7), size: 1 + Math.random() * 3, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
-        }
+          const r = Math.random();
+          const depth = r < 0.45 ? 0.55 : r < 0.85 ? 1.0 : 1.45;
+          return {
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (Math.random() - 0.5) * 0.3 * depth,
+            vy: (0.5 + Math.random() * 0.9) * depth,
+            ax: 0, ay: 0,
+            size: (depth < 0.7 ? 1.2 : depth > 1.2 ? 4.0 : 2.2) * (0.7 + Math.random() * 0.6),
+            depth, life: Math.random() * 100,
+            seed: Math.random() * 9999,
+            active: true
+          };
+        },
+        drawAll(p, particles, effect, reduceMotion, dt) {
+          const [cr, cg, cb] = effect.color;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("snow", lvl);
+          const ground = p._snowGround;
+          const gw = p._snowGroundW || 4;
+          const maxGroundH = p.height * 0.1;
+
+          /* Update + draw each flake */
+          for (let i = 0; i < particles.length; i++) {
+            const f = particles[i];
+            if (!f.active) continue;
+
+            /* Physics */
+            if (!reduceMotion) {
+              const t = performance.now() * 0.0002 + f.life * 0.01;
+              const flowX = Math.sin(t + f.seed) * 0.03 * profile.flowAmp;
+              const flowY = Math.cos(t * 0.8 + f.seed) * 0.01;
+              f.ax = flowX;
+              f.ay = 0.003 + flowY;
+              applyPointerField(f, p._pointer, {
+                mode: "attract", radius: 140,
+                strength: 0.03 * profile.pointer, idleCutoff: 0.06
+              });
+              applyPointerField(f, p._pointer, {
+                mode: "orbit", radius: 70,
+                strength: 0.012 * profile.swirl, idleCutoff: 0.06
+              });
+              f.vx += f.ax;
+              f.vy += f.ay;
+              f.vx *= 0.992;
+              f.vy *= 0.998;
+              const maxSpeed = 0.9 + f.depth * 1.3;
+              const speed = Math.hypot(f.vx, f.vy);
+              if (speed > maxSpeed) { f.vx = f.vx / speed * maxSpeed; f.vy = f.vy / speed * maxSpeed; }
+              f.x += f.vx;
+              f.y += f.vy;
+              f.life += 0.5;
+            }
+
+            /* Ground detection: accumulate or respawn */
+            if (ground && f.y >= p.height - 2 - (ground[Math.floor(f.x / gw)] || 0)) {
+              /* Accumulate into heightmap */
+              const gi = Math.floor(f.x / gw);
+              if (gi >= 0 && gi < ground.length) {
+                const addH = 0.3 + f.depth * 0.2;
+                ground[gi] = Math.min(maxGroundH, ground[gi] + addH);
+                /* Spread to neighbors for smoothness */
+                if (gi > 0) ground[gi - 1] = Math.min(maxGroundH, ground[gi - 1] + addH * 0.3);
+                if (gi < ground.length - 1) ground[gi + 1] = Math.min(maxGroundH, ground[gi + 1] + addH * 0.3);
+              }
+              /* Respawn at top */
+              f.x = Math.random() * p.width;
+              f.y = -10 - Math.random() * p.height * 0.3;
+              f.vx = (Math.random() - 0.5) * 0.3 * f.depth;
+              f.vy = (0.5 + Math.random() * 0.9) * f.depth;
+            } else if (f.y > p.height + 20 || f.x < -40 || f.x > p.width + 40) {
+              f.x = Math.random() * p.width;
+              f.y = -10 - Math.random() * p.height * 0.3;
+              f.vx = (Math.random() - 0.5) * 0.3 * f.depth;
+              f.vy = (0.5 + Math.random() * 0.9) * f.depth;
+            }
+
+            /* Draw flake */
+            const alpha = f.depth > 1.2 ? 190 : f.depth < 0.7 ? 55 : 110;
+            const cache = p._cache;
+            if (cache) {
+              const sprite = cache.radial({
+                radius: 18, color: [cr, cg, cb], alpha: 1,
+                midAlpha: 0.18, midStop: 0.45, outerAlpha: 0
+              });
+              const sz = f.size * 6;
+              cache.draw(sprite, f.x, f.y, sz, sz, "source-over", alpha);
+            } else {
+              p.noStroke();
+              p.fill(cr, cg, cb, alpha * 0.3);
+              p.circle(f.x, f.y, f.size * 4);
+              p.fill(cr, cg, cb, alpha);
+              p.circle(f.x, f.y, f.size * 2);
+            }
+          }
+
+          /* Draw ground snow accumulation */
+          if (ground) {
+            /* Melt: if average height > maxGroundH, shrink all */
+            let sum = 0;
+            for (let i = 0; i < ground.length; i++) sum += ground[i];
+            const avgH = sum / ground.length;
+            const meltFactor = avgH > maxGroundH * 0.8 ? 0.995 : 1.0;
+            if (meltFactor < 1) {
+              for (let i = 0; i < ground.length; i++) {
+                ground[i] *= meltFactor;
+                if (ground[i] < 0.1) ground[i] = 0;
+              }
+            }
+            /* Draw filled ground shape */
+            p.noStroke();
+            /* Slightly darker base */
+            p.fill(cr * 0.88, cg * 0.88, cb * 0.88, 180);
+            p.beginShape();
+            p.vertex(0, p.height);
+            for (let i = 0; i < ground.length; i++) {
+              const x = i * gw;
+              const y = p.height - ground[i];
+              p.vertex(x, y);
+            }
+            p.vertex(p.width, p.height);
+            p.endShape(p.CLOSE);
+            /* Bright top edge */
+            p.stroke(255, 255, 255, 60);
+            p.strokeWeight(1.2);
+            p.noFill();
+            p.beginShape();
+            for (let i = 0; i < ground.length; i++) {
+              p.vertex(i * gw, p.height - ground[i]);
+            }
+            p.endShape();
+          }
+        },
+        draw(p, particle, profile) { /* drawAll handles rendering */ },
+        tick(particle, p, reduceMotion) { /* drawAll handles all updates */ },
       },
 
       wind: {
         count: 48, color: [236, 232, 214], gravity: 0.5, drift: 5.5, streak: true,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          const alpha = 50 + Math.sin(particle.life * 0.03 + particle.seed) * 22;
+          const alpha = 40 + Math.sin(particle.life * 0.03 + particle.seed) * 25;
           p.stroke(r, g, b, alpha);
-          p.strokeWeight(0.8);
-          // Curved streak using noise
+          p.strokeWeight(particle.depth > 1 ? 1.2 : 0.6);
+          /* Continuous curved streak using multiple sample points */
           p.noFill();
           p.beginShape();
-          for (let i = 0; i < 4; i++) {
-            const t = particle.life + i * 3;
-            const wobble = p.noise(t * 0.02, particle.seed) * 16 - 8;
-            p.curveVertex(particle.x + i * particle.size * 0.3, particle.y + wobble);
+          for (let i = 0; i < 6; i++) {
+            const t = particle.life + i * 2.5;
+            const wobble = p.noise(t * 0.015, particle.seed) * 20 - 10;
+            const bendX = p.noise(t * 0.008, particle.seed + 100) * 8 - 4;
+            p.curveVertex(particle.x + i * particle.size * 0.25 + bendX, particle.y + wobble + i * 2);
           }
           p.endShape();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            // Noise-based wind gusts
-            const gust = p.noise(particle.life * 0.01, particle.seed) * 3;
-            particle.x += particle.vx + gust;
-            particle.y += particle.vy + p.noise(particle.seed + 300, particle.life * 0.008) * 1.5 - 0.75;
-            particle.life += 1;
-          }
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("wind", lvl);
+          /* Flow field wind */
+          const gust = p.noise(particle.life * 0.008, particle.seed) * profile.gustAmp;
+          const vertical = p.noise(particle.seed + 300, particle.life * 0.006) * 0.8 - 0.4;
+          /* Pointer bend */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 150,
+            strength: 0.8 * profile.pointerStrength, idleCutoff: 0.08
+          });
+          particle.x += particle.vx + gust;
+          particle.y += particle.vy + vertical;
+          particle.life += 1;
           if (particle.x > p.width + particle.size) {
             particle.x = -p.width * 0.2;
             particle.y = Math.random() * p.height;
+            particle.depth = 0.5 + Math.random() * 0.8;
           }
         },
         initParticle(w, h) {
-          return { x: -w * 0.2 + Math.random() * w * 1.2, y: Math.random() * h, vx: 3 + Math.random() * 7, vy: (Math.random() - 0.5) * 0.7, size: 30 + Math.random() * 120, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000 };
+          return { x: -w * 0.2 + Math.random() * w * 1.2, y: Math.random() * h, vx: 3 + Math.random() * 7, vy: (Math.random() - 0.5) * 0.7, size: 30 + Math.random() * 120, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000, depth: 0.5 + Math.random() * 0.8 };
         }
       },
 
@@ -538,27 +1369,38 @@
         count: 12, color: [180, 200, 220], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
+          const t = particle.life / (particle.maxLife || 100);
+          const ease = 1 - (1 - t) * (1 - t);
           p.noFill();
-          p.stroke(r, g, b, 40 + particle.life * 0.3);
+          /* Elliptical perspective compression */
+          const rx = particle.size * (1 + ease * 1.5);
+          const ry = rx * (0.28 + particle.ecc * 0.12);
+          p.stroke(r, g, b, (1 - t) * 60);
           p.strokeWeight(0.8);
-          const radius = particle.size * (1 + particle.life * 0.08);
-          p.circle(particle.x, particle.y, radius);
-          if (radius > 20) {
-            p.stroke(r, g, b, 20 + particle.life * 0.15);
-            p.circle(particle.x, particle.y, radius * 0.6);
+          p.ellipse(particle.x, particle.y, rx * 2, ry * 2);
+          /* Inner ring with different phase */
+          if (rx > 15) {
+            const innerRx = rx * 0.55;
+            const innerRy = ry * 0.55;
+            p.stroke(r, g, b, (1 - t) * 25);
+            p.ellipse(particle.x + particle.ox, particle.y + particle.oy, innerRx * 2, innerRy * 2);
           }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) particle.life += 0.5;
-          if (particle.life > 100) {
+          if (!reduceMotion) particle.life += 0.6;
+          if (particle.life > (particle.maxLife || 100)) {
             particle.x = Math.random() * p.width;
             particle.y = Math.random() * p.height;
             particle.life = 0;
             particle.size = 10 + Math.random() * 30;
+            particle.maxLife = 80 + Math.random() * 40;
+            particle.ecc = Math.random() * 0.3;
+            particle.ox = (Math.random() - 0.5) * 4;
+            particle.oy = (Math.random() - 0.5) * 2;
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: 0, vy: 0, size: 10 + Math.random() * 30, life: Math.random() * 80, splash: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: 0, vy: 0, size: 10 + Math.random() * 30, life: Math.random() * 80, splash: 0, maxLife: 80 + Math.random() * 40, ecc: Math.random() * 0.3, ox: (Math.random() - 0.5) * 4, oy: (Math.random() - 0.5) * 2 };
         }
       },
 
@@ -566,17 +1408,29 @@
         count: 20, color: [160, 195, 215], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.noFill();
-          p.stroke(r, g, b, 30 + Math.sin(particle.life * 0.05) * 15);
-          p.strokeWeight(0.6);
           const wave = Math.sin(particle.life * 0.03 + particle.x * 0.01) * 12;
+          const highlight = Math.sin(particle.life * 0.05 + particle.x * 0.008) * 0.5 + 0.5;
+          /* Main wave line */
+          p.noFill();
+          p.stroke(r, g, b, 25 + highlight * 18);
+          p.strokeWeight(0.6);
           p.beginShape();
-          for (let i = 0; i < 5; i++) {
-            const wx = particle.x + (i - 2) * 30;
+          for (let i = 0; i < 7; i++) {
+            const wx = particle.x + (i - 3) * 28;
             const wy = particle.y + Math.sin(particle.life * 0.04 + i * 0.8) * 6 + wave;
             p.curveVertex(wx, wy);
           }
           p.endShape();
+          /* Thin highlight strip */
+          if (highlight > 0.6 && particle.y > p.height * 0.4) {
+            const ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.stroke(220, 235, 245, (highlight - 0.6) * 40);
+            p.strokeWeight(0.4);
+            p.line(particle.x - 20, particle.y - 1, particle.x + 40, particle.y - 1);
+            ctx.restore();
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) { particle.life += 0.8; particle.x += 0.3; }
@@ -595,12 +1449,32 @@
         count: 46, color: [239, 219, 164], gravity: 0.45, drift: 0.9,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.noStroke();
-          p.fill(r, g, b, 115);
-          p.circle(particle.x, particle.y, particle.size * 2);
+          /* Visibility controlled by depth and life */
+          const brightness = 0.3 + Math.sin(particle.life * 0.02 + particle.seed) * 0.15;
+          const depthAlpha = particle.depth > 1.2 ? 140 : particle.depth < 0.7 ? 60 : 100;
+          const cache = p._cache;
+          if (cache) {
+            const sprite = cache.radial({
+              radius: 10, color: [r, g, b], alpha: brightness,
+              midAlpha: 0.2, midStop: 0.4, outerAlpha: 0
+            });
+            const sz = particle.size * (1 + particle.depth) * 3;
+            cache.draw(sprite, particle.x, particle.y, sz, sz, "source-over", depthAlpha);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, depthAlpha * brightness);
+            p.circle(particle.x, particle.y, particle.size * 2);
+          }
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx; particle.y += particle.vy; particle.life += 1; }
+          if (reduceMotion) return;
+          /* Pointer scatter — gentle, not explosive */
+          applyPointerField(particle, p._pointer, {
+            mode: "scatter", radius: 100, strength: 0.3, idleCutoff: 0.15
+          });
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.life += 1;
           if (particle.y > p.height + particle.size || particle.x > p.width + particle.size || particle.x < -particle.size) {
             particle.x = Math.random() * p.width;
             particle.y = -particle.size;
@@ -609,7 +1483,7 @@
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.9, vy: 0.45 * (0.45 + Math.random() * 0.9), size: 0.8 + Math.random() * 2.8, life: Math.random() * 100, splash: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.9, vy: 0.45 * (0.45 + Math.random() * 0.9), size: 0.8 + Math.random() * 2.8, life: Math.random() * 100, splash: 0, seed: Math.random() * 1000, depth: 0.5 + Math.random() * 0.8 };
         }
       },
 
@@ -618,11 +1492,27 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const glow = 0.4 + Math.sin(particle.life * 0.1) * 0.3;
-          p.noStroke();
-          p.fill(r, g, b, glow * 200);
-          p.circle(particle.x, particle.y, particle.size * 2);
-          p.fill(255, 200, 100, glow * 80);
-          p.circle(particle.x, particle.y, particle.size * 5);
+          const cache = p._cache;
+          if (cache) {
+            /* Color core */
+            const coreSprite = cache.radial({
+              radius: 14, color: [r, g, b], alpha: 1,
+              midAlpha: 0.4, midStop: 0.35, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 4, particle.size * 4, "source-over", glow * 220);
+            /* Warm halo */
+            const haloSprite = cache.radial({
+              radius: 28, color: [255, 200, 100], alpha: 1,
+              midAlpha: 0.1, midStop: 0.4, outerAlpha: 0
+            });
+            cache.draw(haloSprite, particle.x, particle.y, particle.size * 6, particle.size * 6, "screen", glow * 90);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, glow * 200);
+            p.circle(particle.x, particle.y, particle.size * 2);
+            p.fill(255, 200, 100, glow * 80);
+            p.circle(particle.x, particle.y, particle.size * 5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) { particle.x += particle.vx + Math.sin(particle.life * 0.04) * 0.8; particle.y += particle.vy; particle.life += 1; }
@@ -643,18 +1533,36 @@
         count: 40, color: [255, 140, 40], gravity: -1.2, drift: 0.8,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          // Noise-based flicker instead of simple sin
           const flicker = 0.4 + p.noise(particle.life * 0.04, particle.seed) * 0.5;
-          p.noStroke();
-          // Outer heat glow
-          p.fill(255, 100, 20, flicker * 40);
-          p.circle(particle.x, particle.y, particle.size * 8);
-          // Mid flame
-          p.fill(r, g, b, flicker * 160);
-          p.circle(particle.x, particle.y, particle.size * 3.5);
-          // Hot core
-          p.fill(255, 230, 120, flicker * 200);
-          p.circle(particle.x, particle.y, particle.size * 1.5);
+          const cache = p._cache;
+          if (cache) {
+            /* Outer heat glow — elongated */
+            const heatSprite = cache.radial({
+              radius: 32, color: [255, 100, 20], alpha: 1,
+              midAlpha: 0.06, midStop: 0.4, outerAlpha: 0, shape: "e"
+            });
+            cache.draw(heatSprite, particle.x, particle.y, particle.size * 8, particle.size * 10, "screen", flicker * 50);
+            /* Mid flame — warm continuous volume */
+            const flameSprite = cache.radial({
+              radius: 20, color: [r, g, b], alpha: 1,
+              midAlpha: 0.35, midStop: 0.35, outerAlpha: 0, shape: "e"
+            });
+            cache.draw(flameSprite, particle.x, particle.y, particle.size * 4, particle.size * 5, "source-over", flicker * 180);
+            /* Hot core */
+            const coreSprite = cache.radial({
+              radius: 10, color: [255, 230, 120], alpha: 1,
+              midAlpha: 0.5, midStop: 0.3, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 1.8, particle.size * 2, "screen", flicker * 200);
+          } else {
+            p.noStroke();
+            p.fill(255, 100, 20, flicker * 40);
+            p.circle(particle.x, particle.y, particle.size * 8);
+            p.fill(r, g, b, flicker * 160);
+            p.circle(particle.x, particle.y, particle.size * 3.5);
+            p.fill(255, 230, 120, flicker * 200);
+            p.circle(particle.x, particle.y, particle.size * 1.5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
@@ -680,16 +1588,28 @@
         count: 24, color: [150, 230, 150], gravity: 0, drift: 0,
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
-          p.stroke(r, g, b, 25 + Math.sin(particle.life * 0.08) * 15);
-          p.strokeWeight(0.8);
+          /* Scanline with wobble */
           const y = particle.y;
           const wobble = Math.sin(particle.life * 0.15 + y * 0.03) * (3 + particle.size);
+          p.stroke(r, g, b, 20 + Math.sin(particle.life * 0.08) * 12);
+          p.strokeWeight(0.6);
           p.line(0, y + wobble, p.width, y - wobble * 0.2);
-          // Scanline bright spot
-          if (Math.abs(y - (particle.life * 2) % p.height) < 20) {
-            p.stroke(r, g, b, 50);
-            p.strokeWeight(2);
+          /* Bright sweep spot */
+          const sweepY = (particle.life * 1.5) % p.height;
+          const dist = Math.abs(y - sweepY);
+          if (dist < 25) {
+            const intensity = (1 - dist / 25);
+            p.stroke(r, g, b, 45 * intensity);
+            p.strokeWeight(1.5);
             p.line(0, y, p.width, y);
+          }
+          /* Noise burst — occasional short horizontal glitch */
+          if (particle.life % 60 < 2 && particle.depth > 0.8) {
+            const burstY = y + (Math.random() - 0.5) * 20;
+            p.stroke(r, g, b, 30);
+            p.strokeWeight(0.5);
+            const bx = Math.random() * p.width;
+            p.line(bx, burstY, bx + 30 + Math.random() * 60, burstY);
           }
         },
         tick(particle, p, reduceMotion) {
@@ -697,7 +1617,7 @@
           if (particle.life > 300) particle.life = 0;
         },
         initParticle(w, h) {
-          return { x: 0, y: Math.random() * h, vx: 0, vy: 0, size: 1 + Math.random() * 3, life: Math.random() * 250, splash: 0 };
+          return { x: 0, y: Math.random() * h, vx: 0, vy: 0, size: 1 + Math.random() * 3, life: Math.random() * 250, splash: 0, depth: Math.random() };
         }
       },
 
@@ -706,25 +1626,43 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const alpha = 0.3 + Math.sin(particle.life * 0.04) * 0.2;
-          p.noStroke();
-          p.fill(r, g, b, alpha * 255);
-          // Small paper fiber shape
+          const sz = particle.size;
+          /* Flat paper fiber with edge highlight */
           p.push();
           p.translate(particle.x, particle.y);
-          p.rotate(particle.life * 0.02);
-          p.rect(-particle.size * 2, -particle.size * 0.4, particle.size * 4, particle.size * 0.8, 1);
+          p.rotate(particle.rotation || 0);
+          p.noStroke();
+          p.fill(r, g, b, alpha * 255);
+          p.rect(-sz * 2, -sz * 0.35, sz * 4, sz * 0.7, 1);
+          /* Edge highlight — one side bright, one side dark */
+          p.fill(255, 255, 255, alpha * 60);
+          p.rect(-sz * 2, -sz * 0.35, sz * 4, sz * 0.15, 1);
           p.pop();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) { particle.x += particle.vx + Math.sin(particle.life * 0.03) * 0.5; particle.y += particle.vy; particle.life += 1; }
+          if (reduceMotion) return;
+          /* Air resistance: horizontal drift slows down */
+          particle.vx *= 0.995;
+          particle.x += particle.vx + Math.sin(particle.life * 0.03) * 0.5;
+          particle.y += particle.vy;
+          /* Rotation with tumble */
+          particle.rotation = (particle.rotation || 0) + Math.sin(particle.life * 0.02) * 0.015;
+          particle.life += 1;
+          /* Pointer scatter */
+          applyPointerField(particle, p._pointer, {
+            mode: "scatter", radius: 100, strength: 0.5, idleCutoff: 0.1
+          });
           if (particle.y > p.height + particle.size || particle.life > 200) {
             particle.x = Math.random() * p.width;
             particle.y = -particle.size * 4;
+            particle.vx = (Math.random() - 0.5) * 0.7;
+            particle.vy = 0.3 + Math.random() * 0.5;
+            particle.rotation = Math.random() * Math.PI * 2;
             particle.life = 0;
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 0.7, vy: 0.3 + Math.random() * 0.5, size: 1 + Math.random() * 2, life: Math.random() * 150, splash: 0 };
+          return { x: Math.random() * w, y: -Math.random() * h * 0.3, vx: (Math.random() - 0.5) * 0.7, vy: 0.3 + Math.random() * 0.5, size: 1 + Math.random() * 2, life: Math.random() * 150, splash: 0, rotation: Math.random() * Math.PI * 2 };
         }
       },
 
@@ -733,12 +1671,29 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const twinkle = 0.3 + Math.sin(particle.life * 0.05 + particle.seed) * 0.3;
-          p.noStroke();
-          p.fill(r, g, b, twinkle * 255);
-          p.circle(particle.x, particle.y, particle.size * 2);
-          if (particle.size > 2.5) {
-            p.fill(r, g, b, twinkle * 40);
-            p.circle(particle.x, particle.y, particle.size * 5);
+          const cache = p._cache;
+          if (cache) {
+            const coreAlpha = twinkle * 255;
+            const coreSprite = cache.radial({
+              radius: 12, color: [r, g, b], alpha: 1,
+              midAlpha: 0.3, midStop: 0.5, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 3, particle.size * 3, "source-over", coreAlpha);
+            if (particle.size > 2.5) {
+              const flareSprite = cache.radial({
+                radius: 24, color: [r, g, b], alpha: 1,
+                midAlpha: 0.08, midStop: 0.35, outerAlpha: 0, shape: "r"
+              });
+              cache.draw(flareSprite, particle.x, particle.y, particle.size * 5, particle.size * 5, "screen", twinkle * 60);
+            }
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, twinkle * 255);
+            p.circle(particle.x, particle.y, particle.size * 2);
+            if (particle.size > 2.5) {
+              p.fill(r, g, b, twinkle * 40);
+              p.circle(particle.x, particle.y, particle.size * 5);
+            }
           }
         },
         tick(particle, p, reduceMotion) {
@@ -762,44 +1717,50 @@
           p.noStroke();
           p.push();
           p.translate(particle.x, particle.y);
+          /* Flip: show front or back */
+          const flip = Math.sin(particle.rotation || 0) > 0 ? 1 : 0.7;
           p.rotate(particle.rotation || 0);
-          // Leaf shape — pointed ellipse with notch
-          p.fill(r, g, b, alpha * 200);
+          /* Leaf shape with notch */
+          p.fill(r * flip, g * flip, b * flip, alpha * 200);
           p.beginShape();
-          p.vertex(0, -sz * 2.5);          // tip
+          p.vertex(0, -sz * 2.5);
           p.bezierVertex(sz * 1.2, -sz * 1.5, sz * 1.5, -sz * 0.3, sz * 0.8, sz * 0.8);
-          p.vertex(sz * 0.15, sz * 1.8);   // notch
+          p.vertex(sz * 0.15, sz * 1.8);
           p.vertex(-sz * 0.15, sz * 1.8);
           p.vertex(-sz * 0.8, sz * 0.8);
           p.bezierVertex(-sz * 1.5, -sz * 0.3, -sz * 1.2, -sz * 1.5, 0, -sz * 2.5);
           p.endShape(p.CLOSE);
-          // Leaf vein
-          p.stroke(r * 0.65, g * 0.65, b * 0.65, alpha * 80);
+          /* Leaf vein */
+          p.stroke(r * 0.5, g * 0.5, b * 0.5, alpha * 60);
           p.strokeWeight(0.4);
           p.line(0, -sz * 2.2, 0, sz * 1.5);
-          // Side veins
-          for (let v = -1; v <= 1; v += 1) {
-            const vy = v * sz * 1.0;
-            p.line(0, vy, sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-            p.line(0, vy, -sz * 0.6 * (v === 0 ? 0.5 : 1), vy - sz * 0.5);
-          }
           p.pop();
         },
         tick(particle, p, reduceMotion) {
-          if (!reduceMotion) {
-            const nx = p.noise(particle.life * 0.008, particle.seed) * 2 - 1;
-            const ny = p.noise(particle.seed + 100, particle.life * 0.006) * 0.6;
-            particle.x += particle.vx + nx * 1.5;
-            particle.y += particle.vy + ny;
-            particle.rotation = (particle.rotation || 0) + nx * 0.04 + Math.sin(particle.life * 0.02) * 0.02;
-            particle.life += 1;
-          }
+          if (reduceMotion) return;
+          const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
+          const profile = getIntensityProfile("leaves", lvl);
+          /* Flow field wind */
+          const nx = p.noise(particle.life * 0.008, particle.seed) * 2 - 1;
+          const ny = p.noise(particle.seed + 100, particle.life * 0.006) * 0.6;
+          /* Air resistance */
+          particle.vx *= 0.998;
+          particle.x += particle.vx + nx * 1.5 * profile.gustAmp;
+          particle.y += particle.vy + ny;
+          /* Rotation with tumble */
+          particle.rotation = (particle.rotation || 0) + nx * 0.04 + Math.sin(particle.life * 0.02) * 0.02;
+          particle.life += 1;
+          /* Pointer bend or scatter */
+          applyPointerField(particle, p._pointer, {
+            mode: "bend", radius: 120,
+            strength: 0.6 * profile.pointerStrength, idleCutoff: 0.1
+          });
           if (particle.y > p.height + 20 || particle.x > p.width + 40 || particle.x < -40) {
             particle.x = Math.random() * p.width;
             particle.y = -20 - Math.random() * 40;
             particle.rotation = Math.random() * Math.PI * 2;
             particle.life = 0;
-            particle.depth = 0.3 + Math.random() * 0.7; // depth layer
+            particle.depth = 0.3 + Math.random() * 0.7;
           }
         },
         initParticle(w, h) {
@@ -812,36 +1773,58 @@
         draw(p, particle, profile) {
           const [r, g, b] = profile.color;
           const pulse = 0.3 + Math.sin(particle.life * 0.06 + particle.seed) * 0.35;
-          const nearPointer = particle.nearPointer || 0;
-          const extraBright = nearPointer * 0.3;
-          p.noStroke();
-          // Outer glow
-          p.fill(r, g, b, pulse * 30 + extraBright * 20);
-          p.circle(particle.x, particle.y, particle.size * 12);
-          // Inner glow
-          p.fill(r, g, b, pulse * 100 + extraBright * 60);
-          p.circle(particle.x, particle.y, particle.size * 4);
-          // Core
-          p.fill(255, 255, 220, pulse * 220 + extraBright * 35);
-          p.circle(particle.x, particle.y, particle.size * 1.5);
+          const extraBright = (particle.pointerGlow || 0) * 0.3;
+          const cache = p._cache;
+          if (cache) {
+            /* Outer halo — additive only for inner part */
+            const haloSprite = cache.radial({
+              radius: 24, color: [r, g, b], alpha: 1,
+              midAlpha: 0.06, midStop: 0.35, outerAlpha: 0
+            });
+            cache.draw(haloSprite, particle.x, particle.y, particle.size * 12, particle.size * 12, "source-over", pulse * 30 + extraBright * 20);
+            /* Inner glow */
+            const innerSprite = cache.radial({
+              radius: 14, color: [r, g, b], alpha: 1,
+              midAlpha: 0.25, midStop: 0.4, outerAlpha: 0
+            });
+            cache.draw(innerSprite, particle.x, particle.y, particle.size * 4, particle.size * 4, "source-over", pulse * 100 + extraBright * 60);
+            /* Hot core — additive */
+            const coreSprite = cache.radial({
+              radius: 8, color: [255, 255, 220], alpha: 1,
+              midAlpha: 0.5, midStop: 0.3, outerAlpha: 0
+            });
+            cache.draw(coreSprite, particle.x, particle.y, particle.size * 1.8, particle.size * 1.8, "screen", pulse * 200 + extraBright * 35);
+          } else {
+            p.noStroke();
+            p.fill(r, g, b, pulse * 30 + extraBright * 20);
+            p.circle(particle.x, particle.y, particle.size * 12);
+            p.fill(r, g, b, pulse * 100 + extraBright * 60);
+            p.circle(particle.x, particle.y, particle.size * 4);
+            p.fill(255, 255, 220, pulse * 220 + extraBright * 35);
+            p.circle(particle.x, particle.y, particle.size * 1.5);
+          }
         },
         tick(particle, p, reduceMotion) {
           if (!reduceMotion) {
-            // Noise drift
+            /* Noise drift */
             const nx = p.noise(particle.life * 0.005, particle.seed) * 2 - 1;
             const ny = p.noise(particle.seed + 50, particle.life * 0.004) * 2 - 1;
-            particle.x += nx * 0.6 + particle.vx;
-            particle.y += ny * 0.4 + particle.vy;
+            particle.vx += nx * 0.04;
+            particle.vy += ny * 0.03;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
             particle.life += 1;
-            // Flocking — simple neighbor attraction (find 1-2 nearest, pull gently)
-            if (particles.length > 1) {
+            /* Flocking — use p._particles instead of outer scope variable */
+            const allParticles = p._particles;
+            if (allParticles && allParticles.length > 1) {
               let nearestDist = Infinity, nearest = null;
-              for (const other of particles) {
-                if (other === particle) continue;
+              for (let i = 0; i < allParticles.length; i++) {
+                const other = allParticles[i];
+                if (other === particle || !other.active) continue;
                 const dx = other.x - particle.x;
                 const dy = other.y - particle.y;
                 const d = dx * dx + dy * dy;
-                if (d < nearestDist && d < 90000) { // within 300px
+                if (d < nearestDist && d < 90000) {
                   nearestDist = d;
                   nearest = other;
                 }
@@ -852,21 +1835,22 @@
                 particle.vy += (nearest.y - particle.y) / d * 0.015;
               }
             }
-            // Damping
+            /* Damping */
             particle.vx *= 0.98;
             particle.vy *= 0.98;
-            // Mouse interaction
-            if (typeof pointerX === "number") {
-              const mx = pointerX * p.width;
-              const my = pointerY * p.height;
-              const dx = particle.x - mx;
-              const dy = particle.y - my;
+            /* Pointer interaction — force-based instead of direct position */
+            applyPointerField(particle, p._pointer, {
+              mode: "repel", radius: 120, strength: 0.03, idleCutoff: 0.1
+            });
+            /* Pointer glow feedback */
+            const ps = p._pointer && p._pointer.state;
+            if (ps && ps.active && ps.x != null) {
+              const dx = particle.x - ps.x;
+              const dy = particle.y - ps.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              particle.nearPointer = dist < 120 ? (1 - dist / 120) : 0;
-              if (dist < 100 && dist > 0) {
-                particle.x += (dx / dist) * 0.8;
-                particle.y += (dy / dist) * 0.5;
-              }
+              particle.pointerGlow = dist < 120 ? (1 - dist / 120) : 0;
+            } else {
+              particle.pointerGlow = (particle.pointerGlow || 0) * 0.9;
             }
           }
           if (particle.x < -30 || particle.x > p.width + 30 || particle.y < -30 || particle.y > p.height + 30) {
@@ -878,7 +1862,7 @@
           }
         },
         initParticle(w, h) {
-          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2, size: 0.8 + Math.random() * 1.2, life: Math.random() * 400, splash: 0, seed: Math.random() * 1000, nearPointer: 0 };
+          return { x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2, size: 0.8 + Math.random() * 1.2, life: Math.random() * 400, splash: 0, seed: Math.random() * 1000, pointerGlow: 0 };
         }
       }
     };
@@ -1069,6 +2053,8 @@
       layer.dataset.vrWeatherEngine = "p5";
       const effect = VIBE_EFFECTS[kind] || VIBE_EFFECTS.dust;
       let instance = null;
+      const clock = createFrameClock();
+      let localCache = null;
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
@@ -1076,10 +2062,11 @@
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
           const lvl = normalizeWeatherLevel(root.dataset.vrWeatherLevel);
-          const mult = lvl === "off" ? 0 : lvl === "high" ? 1.55 : 1;
-          const reducedMult = lvl === "off" ? 0 : lvl === "high" ? 0.25 : 0.18;
-          const count = reduceMotion ? Math.ceil(effect.count * reducedMult) : Math.ceil(effect.count * mult);
+          const profile = getIntensityProfile(kind, lvl);
+          const spawnScale = reduceMotion ? (lvl === "off" ? 0 : 0.18) : profile.spawnScale;
+          const count = Math.ceil(effect.count * spawnScale);
           particles = Array.from({ length: count }, () => effect.initParticle(p.width, p.height));
+          if (effect.setup) effect.setup(p, kind);
         }
 
         p.setup = () => {
@@ -1088,47 +2075,63 @@
           canvas.parent(layer);
           p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
           p.frameRate(30);
+          localCache = createGradientSpriteCache(p);
           rebuild();
         };
 
+        let resizeTimer = 0;
         p.windowResized = () => {
-          p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
-          rebuild();
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+            syncPointerBounds();
+            if (localCache) { localCache.destroy(); localCache = createGradientSpriteCache(p); }
+            rebuild();
+          }, 100);
         };
 
         p.draw = () => {
+          clock.update(performance.now());
+          const dt = clock.dt;
+          /* Skip visual updates when hidden (clock paused) */
+          if (dt <= 0) return;
+          /* Update pointer smoothed coordinates */
+          const layerBounds = layer.getBoundingClientRect();
+          pointer.updateBounds({ left: layerBounds.left, top: layerBounds.top });
+          pointer.update(dt);
+          p._dt = dt;
+          p._cache = localCache;
+          p._pointer = pointer;
+          p._particles = particles;
           p.clear();
           p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
-          for (const particle of particles) {
-            effect.draw(p, particle, effect, reduceMotion);
-            if (!reduceMotion) {
-              effect.tick(particle, p, reduceMotion);
-              particle.life += 1;
+          if (effect.drawAll) {
+            /* Bulk rendering mode (fog, rain with impacts, etc.) */
+            effect.drawAll(p, particles, effect, reduceMotion, dt);
+          } else {
+            for (const particle of particles) {
+              effect.draw(p, particle, effect, reduceMotion);
+              if (!reduceMotion) {
+                effect.tick(particle, p, reduceMotion);
+                particle.life += dt * 60;
+              }
             }
           }
-          // Global mouse illumination — subtle radial glow at cursor
-          if (typeof pointerX === "number" && !reduceMotion) {
-            const mx = pointerX * p.width;
-            const my = pointerY * p.height;
-            const glowSize = Math.min(p.width, p.height) * 0.15;
-            p.noStroke();
-            p.blendMode(p.SCREEN);
-            for (let i = 3; i > 0; i--) {
-              const s = glowSize * (i / 3);
-              const a = 4 * (4 - i);
-              p.fill(255, 240, 200, a);
-              p.circle(mx, my, s);
-            }
-            p.blendMode((kind === "fog" || kind === "stars") ? p.SCREEN : p.BLEND);
-          }
+          /* Mouse glow using gradient sprite instead of concentric circles */
+          if (!reduceMotion) drawMouseGlow(p, pointer, localCache);
         };
 
         p.vrUpdateLevel = rebuild;
       };
       instance = new window.p5(sketch);
       return {
-        updateLevel() { if (instance?.vrUpdateLevel) instance.vrUpdateLevel(); },
-        destroy() { if (instance) instance.remove(); instance = null; }
+        _clock: clock,
+        updateLevel() { if (instance && instance.vrUpdateLevel) instance.vrUpdateLevel(); },
+        destroy() {
+          if (localCache) { localCache.destroy(); localCache = null; }
+          if (instance) instance.remove();
+          instance = null;
+        }
       };
     }
 
@@ -1169,12 +2172,14 @@
       window.dispatchEvent(new CustomEvent("vibereading:weather", { detail: { level: weatherLevel, stage, index: activeStageIndex } }));
     }
 
-    /* ── Pointer state (mouse illumination) ── */
-    let pointerX = 0.5, pointerY = 0.5;
-    document.addEventListener("mousemove", (e) => {
-      pointerX = e.clientX / window.innerWidth;
-      pointerY = e.clientY / window.innerHeight;
-    }, { passive: true });
+    /* ── Pointer tracker ── */
+    const pointer = createPointerTracker();
+    pointer.bind(window);
+    function syncPointerBounds() {
+      const layer = $("[data-vr-weather]");
+      if (layer) pointer.updateBounds(layer.getBoundingClientRect());
+    }
+    syncPointerBounds();
 
     /* ── Sound system — sequential BGM-first fallback ── */
     function setBgmVolume(vol) {
@@ -1334,131 +2339,361 @@
       if (!window.p5) { layer.dataset.vrGuideArtEngine = "css"; return; }
       layer.dataset.vrGuideArtEngine = "p5";
       let instance = null;
+      const guideClock = createFrameClock();
+      let guideCache = null;
       const motion = root.dataset.vrGuideMotion || templateId;
       const sketch = (p) => {
         let particles = [];
         let reduceMotion = false;
+        let currentStep = 0;
+        let time = 0;
 
         function rebuild() {
           reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          const count = reduceMotion ? 20 : 80;
-          particles = Array.from({ length: count }, (_, i) => ({
-            x: Math.random() * p.width, y: Math.random() * p.height,
-            seed: Math.random() * 1000, size: 1 + Math.random() * 3,
-            orbit: 30 + Math.random() * 160, delay: i / count,
-            life: Math.random() * 300
-          }));
+          const count = reduceMotion ? 18 : 70;
+          particles = Array.from({ length: count }, function (_, i) {
+            return {
+              x: Math.random() * p.width, y: Math.random() * p.height,
+              seed: Math.random() * 1000, size: 0.8 + Math.random() * 2.5,
+              life: Math.random() * 300, delay: i / count
+            };
+          });
         }
 
-        p.setup = () => {
-          const canvas = p.createCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+        p.setup = function () {
+          var canvas = p.createCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
           canvas.parent(layer);
           p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
           p.frameRate(24);
+          guideCache = createGradientSpriteCache(p);
           rebuild();
         };
 
-        p.windowResized = () => {
+        p.windowResized = function () {
           p.resizeCanvas(layer.clientWidth || window.innerWidth, layer.clientHeight || window.innerHeight);
+          if (guideCache) guideCache.destroy();
+          guideCache = createGradientSpriteCache(p);
           rebuild();
         };
 
-        p.draw = () => {
-          p.clear();
-          const time = p.frameCount * 0.016;
+        /* Read current guide step from DOM */
+        function getStep() {
+          return parseInt(root.dataset.vrGuidePhase || "0", 10);
+        }
 
-          // Template-specific full-screen atmospheric shapes (no crosshair/center circle)
-          if (motion.includes("window")) {
-            // Fog clearing: organic mist wisps that dissolve, not straight lines
-            for (let i = 0; i < 8; i++) {
-              const baseX = p.width * (0.15 + (i / 8) * 0.7);
-              const t = time * 0.7 + i * 1.2;
-              const y1 = p.noise(t, i * 0.3) * p.height;
-              const y2 = p.noise(t + 5, i * 0.3 + 2) * p.height;
-              const alpha = reduceMotion ? 6 : 10 + Math.sin(time + i) * 4;
-              p.stroke(220, 235, 240, alpha);
-              p.strokeWeight(1.5 + Math.sin(t * 0.5) * 0.8);
+        p.draw = function () {
+          guideClock.update(performance.now());
+          if (guideClock.dt <= 0) return;
+          p._dt = guideClock.dt;
+          p._pointer = pointer;
+          p._cache = guideCache;
+          p.clear();
+          time += guideClock.dt;
+          currentStep = getStep();
+          var stepT = Math.min(1, currentStep / 2); /* 0..1 across 3 steps */
+
+          /* ── Window presets ── */
+          if (motion === "window-fog-clear" || motion === "window") {
+            /* Fog clearing: mist wisps that thin with each step */
+            var fogAlpha = Math.max(3, 14 - stepT * 12);
+            for (var i = 0; i < 10; i++) {
+              var baseX = p.width * (0.1 + (i / 10) * 0.8);
+              var t = time * 0.5 + i * 1.5;
+              var y1 = p.noise(t, i * 0.3) * p.height;
+              var y2 = p.noise(t + 5, i * 0.3 + 2) * p.height;
+              p.stroke(220, 235, 240, reduceMotion ? fogAlpha * 0.5 : fogAlpha);
+              p.strokeWeight(1.2 + Math.sin(t * 0.4) * 0.6);
               p.noFill();
               p.beginShape();
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.sin(t * 0.3) * 40, y1);
-              p.curveVertex(baseX + Math.cos(t * 0.2) * 30, (y1 + y2) / 2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
-              p.curveVertex(baseX - Math.sin(t * 0.4) * 35, y2);
+              p.curveVertex(baseX + Math.sin(t * 0.3) * 50, y1);
+              p.curveVertex(baseX + Math.sin(t * 0.3) * 50, y1);
+              p.curveVertex(baseX + Math.cos(t * 0.2) * 35, (y1 + y2) / 2);
+              p.curveVertex(baseX - Math.sin(t * 0.4) * 40, y2);
+              p.curveVertex(baseX - Math.sin(t * 0.4) * 40, y2);
               p.endShape();
             }
-          } else if (motion.includes("route")) {
-            // Route line drawing forward
+            /* Light shaft grows with step */
+            if (currentStep >= 1) {
+              var shaftAlpha = (currentStep === 1 ? 8 : 15) * (reduceMotion ? 0.5 : 1);
+              var ctx = p.drawingContext;
+              ctx.save();
+              ctx.globalCompositeOperation = "screen";
+              p.noStroke();
+              p.fill(240, 245, 255, shaftAlpha);
+              var sx = p.width * 0.6;
+              p.quad(sx - 20, 0, sx + 60, 0, sx + 120 + stepT * 40, p.height, sx - 40 + stepT * 20, p.height);
+              ctx.restore();
+            }
+          } else if (motion === "window-rain-reveal") {
+            /* Rain traces on glass: diagonal streaks that clear */
+            var streakAlpha = Math.max(5, 20 - stepT * 18);
+            for (var i = 0; i < 12; i++) {
+              var sx = p.noise(i * 0.5, time * 0.1) * p.width;
+              var sy = (time * 30 + i * 80) % (p.height + 100) - 50;
+              p.stroke(200, 220, 235, reduceMotion ? streakAlpha * 0.4 : streakAlpha);
+              p.strokeWeight(0.6 + Math.sin(i) * 0.3);
+              p.line(sx, sy, sx - 8, sy + 25 + Math.sin(time + i) * 5);
+            }
+            /* Glass reflection edge */
+            if (currentStep >= 2) {
+              p.stroke(255, 255, 255, 12);
+              p.strokeWeight(1);
+              p.line(p.width * 0.3, 0, p.width * 0.3, p.height);
+            }
+          } else if (motion === "window-light-shaft") {
+            /* Diagonal light beam that expands */
+            var beamWidth = 30 + stepT * 80;
+            var beamAlpha = 6 + stepT * 10;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            p.noStroke();
+            p.fill(245, 240, 220, reduceMotion ? beamAlpha * 0.4 : beamAlpha);
+            var bx = p.width * 0.55;
+            p.quad(bx - beamWidth * 0.3, 0, bx + beamWidth * 0.7, 0,
+              bx + beamWidth + stepT * 60, p.height, bx - beamWidth * 0.5, p.height);
+            ctx.restore();
+            /* Dust motes in the beam */
+            for (var i = 0; i < 15; i++) {
+              var mx = bx + p.noise(i, time * 0.05) * beamWidth * 2 - beamWidth;
+              var my = p.noise(i + 100, time * 0.03) * p.height;
+              p.noStroke();
+              p.fill(255, 245, 210, 40 + Math.sin(time * 1.5 + i) * 20);
+              p.circle(mx, my, 1.5);
+            }
+          }
+
+          /* ── Vinyl presets ── */
+          else if (motion === "vinyl-needle-descent" || motion === "vinyl-groove-orbit") {
+            /* Concentric grooves that activate with step */
+            var cx = p.width / 2, cy = p.height / 2;
             p.noFill();
-            p.stroke(255, 224, 164, reduceMotion ? 16 : 32);
+            var activeGrooves = 3 + currentStep * 4;
+            for (var i = 0; i < activeGrooves; i++) {
+              var r = 40 + i * 45;
+              var a = reduceMotion ? 5 : 8 + Math.sin(time * 1.2 + i * 0.8) * 4;
+              p.stroke(255, 230, 184, a);
+              p.strokeWeight(0.7);
+              p.circle(cx, cy, r + Math.sin(time + i * 0.3) * 4);
+            }
+            /* Needle shadow (step 1+) */
+            if (currentStep >= 1) {
+              var needleAngle = -0.3 + stepT * 0.5;
+              var nx = cx + Math.cos(needleAngle) * 120;
+              var ny = cy + Math.sin(needleAngle) * 120;
+              p.stroke(200, 180, 140, 15);
+              p.strokeWeight(2);
+              p.line(cx + 80, cy - 60, nx, ny);
+            }
+          } else if (motion === "vinyl-groove-resonance") {
+            /* Resonance waves emanating from center */
+            var cx = p.width / 2, cy = p.height / 2;
+            p.noFill();
+            var waveCount = 2 + currentStep * 3;
+            for (var i = 0; i < waveCount; i++) {
+              var r = 30 + i * 60 + Math.sin(time * 0.8 + i) * 10;
+              var a = reduceMotion ? 4 : 7 + Math.sin(time + i * 1.2) * 3;
+              p.stroke(255, 225, 175, a);
+              p.strokeWeight(0.8);
+              p.ellipse(cx, cy, r * 2, r * 1.4);
+            }
+          } else if (motion === "vinyl-dust-orbit") {
+            /* Dust particles orbiting a central point */
+            var cx = p.width / 2, cy = p.height / 2;
+            var orbitCount = 8 + currentStep * 6;
+            p.noStroke();
+            for (var i = 0; i < orbitCount; i++) {
+              var angle = time * 0.3 + (i / orbitCount) * Math.PI * 2;
+              var dist = 60 + i * 15 + Math.sin(time * 0.5 + i) * 10;
+              var dx = cx + Math.cos(angle) * dist;
+              var dy = cy + Math.sin(angle) * dist * 0.6;
+              var a = reduceMotion ? 30 : 50 + Math.sin(time * 1.5 + i) * 20;
+              p.fill(255, 240, 200, a);
+              p.circle(dx, dy, 1.5 + Math.sin(time + i) * 0.5);
+            }
+          }
+
+          /* ── Instrument presets ── */
+          else if (motion === "instrument-signal-lock" || motion === "instrument-scan-lock") {
+            /* Scanlines that stabilize with step */
+            var stability = stepT;
+            p.stroke(150, 230, 150, reduceMotion ? 8 : 14);
+            p.strokeWeight(0.5);
+            var scanY = (time * 30) % p.height;
+            for (var y = 0; y < p.height; y += 6) {
+              var wobble = (1 - stability) * Math.sin(y * 0.05 + time * 3) * 8;
+              var dist = Math.abs(y - scanY);
+              var a = dist < 25 ? (25 - dist) / 25 : 0;
+              p.stroke(150, 230, 150, a * (reduceMotion ? 15 : 35));
+              p.line(wobble, y, p.width + wobble, y);
+            }
+            /* Lock indicator (step 2) */
+            if (currentStep >= 2) {
+              p.fill(150, 230, 150, 30);
+              p.noStroke();
+              p.rect(p.width * 0.45, p.height * 0.48, p.width * 0.1, 4, 2);
+            }
+          } else if (motion === "instrument-dial-seek") {
+            /* Frequency dial sweeping */
+            var dialX = p.width * 0.5;
+            var sweepPos = (time * 0.2 + stepT * 0.3) % 1;
+            var dialY = p.height * 0.3 + sweepPos * p.height * 0.4;
+            p.stroke(150, 230, 150, 12);
+            p.strokeWeight(0.4);
+            for (var y = p.height * 0.2; y < p.height * 0.8; y += 4) {
+              p.line(dialX - 60, y, dialX + 60, y);
+            }
+            /* Pointer line */
+            p.stroke(200, 255, 200, reduceMotion ? 20 : 35);
+            p.strokeWeight(1.5);
+            p.line(dialX - 50, dialY, dialX + 50, dialY);
+          } else if (motion === "instrument-device-wake") {
+            /* CRT warm-up glow */
+            var glowRadius = 50 + stepT * Math.min(p.width, p.height) * 0.4;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            var gradient = ctx.createRadialGradient(p.width / 2, p.height / 2, 0, p.width / 2, p.height / 2, glowRadius);
+            gradient.addColorStop(0, "rgba(150,230,150," + (0.06 + stepT * 0.04) + ")");
+            gradient.addColorStop(1, "rgba(150,230,150,0)");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, p.width, p.height);
+            ctx.restore();
+          }
+
+          /* ── Route presets ── */
+          else if (motion === "route-path-draw" || motion === "route-path-light") {
+            /* Path line drawing forward */
+            var progress = 0.3 + stepT * 0.7;
+            p.noFill();
+            p.stroke(255, 224, 164, reduceMotion ? 14 : 28);
             p.strokeWeight(1.5);
             p.beginShape();
-            for (let i = 0; i < 9; i++) {
-              const x = p.width * (0.05 + i * 0.11);
-              const y = p.height * 0.65 + Math.sin(time * 0.8 + i * 0.6) * 25;
+            var pts = 10;
+            for (var i = 0; i < pts * progress; i++) {
+              var x = p.width * (0.05 + (i / pts) * 0.9);
+              var y = p.height * 0.6 + Math.sin(i * 0.6) * 25;
               p.curveVertex(x, y);
             }
             p.endShape();
-          } else if (motion.includes("vinyl")) {
-            // Groove ripples expanding from center
-            p.noFill();
-            for (let r = 40; r < Math.max(p.width, p.height); r += 50) {
-              const alpha = reduceMotion ? 6 : 10 + Math.sin(time * 1.5 + r * 0.01) * 5;
-              p.stroke(255, 230, 184, alpha);
-              p.strokeWeight(0.8);
-              p.circle(p.width / 2, p.height / 2, r + Math.sin(time + r * 0.02) * 6);
+            /* Station dots */
+            for (var i = 0; i < 3 * progress; i++) {
+              var x = p.width * (0.15 + i * 0.25);
+              var y = p.height * 0.6 + Math.sin(i * 0.6) * 25;
+              p.fill(255, 224, 164, reduceMotion ? 25 : 45);
+              p.noStroke();
+              p.circle(x, y, 5);
             }
-          } else if (motion.includes("instrument")) {
-            // Scanlines sweeping
-            p.stroke(150, 230, 150, reduceMotion ? 10 : 18);
-            p.strokeWeight(0.6);
-            const scanY = (time * 40) % p.height;
-            for (let y = 0; y < p.height; y += 6) {
-              const dist = Math.abs(y - scanY);
-              const alpha = dist < 30 ? (30 - dist) / 30 : 0;
-              p.stroke(150, 230, 150, alpha * (reduceMotion ? 20 : 40));
-              p.line(0, y, p.width, y);
+          } else if (motion === "route-distant-lights") {
+            /* Distant light points appearing */
+            var lightCount = 2 + currentStep * 2;
+            p.noStroke();
+            for (var i = 0; i < lightCount; i++) {
+              var lx = p.width * (0.2 + i * 0.2);
+              var ly = p.height * (0.3 + Math.sin(i * 1.5) * 0.15);
+              var la = reduceMotion ? 15 : 25 + Math.sin(time + i * 2) * 10;
+              var cache = p._cache;
+              if (cache) {
+                var sprite = cache.radial({ radius: 20, color: [255, 224, 164], alpha: 0.3, midAlpha: 0.05 });
+                cache.draw(sprite, lx, ly, 40, 40, "screen", la);
+              } else {
+                p.fill(255, 224, 164, la);
+                p.circle(lx, ly, 6);
+              }
             }
-          } else if (motion.includes("oracle")) {
-            // Card-edge glows floating
-            p.noFill();
-            p.stroke(255, 220, 170, reduceMotion ? 12 : 22);
-            p.strokeWeight(1);
-            for (let i = 0; i < 5; i++) {
-              const cx = p.width * (0.2 + i * 0.15);
-              const cy = p.height * 0.5 + Math.sin(time * 0.7 + i) * 30;
-              p.rect(cx - 20, cy - 30, 40, 60, 4);
+          } else if (motion === "route-map-wind") {
+            /* Wind-swept map texture lines */
+            for (var i = 0; i < 8; i++) {
+              var baseX = p.width * (0.1 + (i / 8) * 0.8);
+              var t = time * 0.4 + i * 1.3;
+              var y = p.noise(t, i * 0.4) * p.height;
+              var windOffset = Math.sin(time * 0.6 + i) * 20 * (1 + stepT);
+              p.stroke(255, 220, 160, reduceMotion ? 5 : 10);
+              p.strokeWeight(0.6);
+              p.line(baseX + windOffset, y, baseX + windOffset + 40, y + 5);
             }
           }
 
-          // Full-screen ambient particles (per-template color)
-          p.noStroke();
-          for (const particle of particles) {
-            if (!reduceMotion) {
-              particle.x += Math.sin(time * 0.3 + particle.seed) * 0.6;
-              particle.y += motion.includes("window") ? 0.8 : Math.cos(time * 0.2 + particle.seed) * 0.4;
-              particle.life += 1;
+          /* ── Oracle presets ── */
+          else if (motion === "oracle-table-reveal" || motion === "oracle-card-reveal") {
+            /* Table cloth texture: subtle horizontal lines */
+            p.stroke(255, 220, 170, reduceMotion ? 4 : 7);
+            p.strokeWeight(0.3);
+            for (var y = 0; y < p.height; y += 12) {
+              p.line(0, y, p.width, y);
             }
-            // Wrap
-            if (particle.y > p.height + 10) { particle.y = -10; particle.x = Math.random() * p.width; }
-            if (particle.y < -10) { particle.y = p.height + 10; }
+            /* Candle glow (grows with step) */
+            var glowSize = 30 + stepT * 60;
+            var ctx = p.drawingContext;
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            var gradient = ctx.createRadialGradient(p.width * 0.5, p.height * 0.35, 0, p.width * 0.5, p.height * 0.35, glowSize);
+            gradient.addColorStop(0, "rgba(255,220,170," + (0.08 + stepT * 0.05) + ")");
+            gradient.addColorStop(1, "rgba(255,220,170,0)");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, p.width, p.height);
+            ctx.restore();
+          } else if (motion === "oracle-card-turn") {
+            /* Card silhouettes that rotate */
+            for (var i = 0; i < 3; i++) {
+              var cx = p.width * (0.3 + i * 0.2);
+              var cy = p.height * 0.5;
+              var angle = (i === currentStep % 3) ? stepT * 0.3 : 0;
+              p.push();
+              p.translate(cx, cy);
+              p.rotate(angle);
+              p.noFill();
+              p.stroke(255, 220, 170, reduceMotion ? 10 : 18);
+              p.strokeWeight(0.8);
+              p.rect(-18, -28, 36, 56, 3);
+              p.pop();
+            }
+          } else if (motion === "oracle-symbol-bloom") {
+            /* Ink bloom: expanding circles from center */
+            var cx = p.width / 2, cy = p.height / 2;
+            var bloomCount = 1 + currentStep;
+            p.noStroke();
+            for (var i = 0; i < bloomCount; i++) {
+              var r = 20 + i * 40 + Math.sin(time * 0.5 + i) * 8;
+              var a = reduceMotion ? 4 : 8 - i * 2;
+              p.fill(255, 220, 170, Math.max(2, a));
+              p.circle(cx, cy, r * 2);
+            }
+          }
 
-            const flicker = 0.3 + Math.sin(time * 2 + particle.seed) * 0.2;
-            let r = 255, g = 232, b = 181;
-            if (motion.includes("instrument")) { r = 150; g = 230; b = 150; }
-            else if (motion.includes("route")) { r = 255; g = 210; b = 126; }
-            else if (motion.includes("window")) { r = 220; g = 235; b = 240; }
-            p.fill(r, g, b, flicker * (reduceMotion ? 60 : 90));
-            p.circle(particle.x, particle.y, particle.size * 1.5);
+          /* ── Ambient particles (shared across all presets) ── */
+          p.noStroke();
+          var pr = 255, pg = 232, pb = 181;
+          if (motion.includes("instrument")) { pr = 150; pg = 230; pb = 150; }
+          else if (motion.includes("route")) { pr = 255; pg = 210; pb = 126; }
+          else if (motion.includes("window")) { pr = 220; pg = 235; pb = 240; }
+          for (var i = 0; i < particles.length; i++) {
+            var pt = particles[i];
+            if (!reduceMotion) {
+              pt.x += Math.sin(time * 0.3 + pt.seed) * 0.5;
+              pt.y += motion.includes("window") ? 0.6 : Math.cos(time * 0.2 + pt.seed) * 0.3;
+              pt.life += 1;
+            }
+            if (pt.y > p.height + 10) { pt.y = -10; pt.x = Math.random() * p.width; }
+            if (pt.y < -10) { pt.y = p.height + 10; }
+            var flicker = 0.25 + Math.sin(time * 2 + pt.seed) * 0.15;
+            p.fill(pr, pg, pb, flicker * (reduceMotion ? 50 : 80));
+            p.circle(pt.x, pt.y, pt.size * 1.5);
           }
         };
 
-        p.vrSetGuideFocus = () => { /* no-op: guide uses full-screen, not focus points */ };
+        p.vrSetGuideFocus = function () { /* no-op: guide uses full-screen atmospheric art */ };
       };
       instance = new window.p5(sketch);
       guideArtEngine = {
-        setFocus() { /* no-op */ },
-        destroy() { if (instance) instance.remove(); instance = null; layer.replaceChildren(); }
+        _clock: guideClock,
+        setFocus: function () { /* no-op */ },
+        destroy() {
+          if (guideCache) { guideCache.destroy(); guideCache = null; }
+          if (instance) instance.remove();
+          instance = null;
+          layer.replaceChildren();
+        }
       };
     }
 
@@ -1617,6 +2852,27 @@
       audioController.stopAll();
       destroyWeatherEngine();
       destroyGuideArt();
+      pointer.destroy();
+    });
+
+    /* ── Visibility pause — stop visual updates when hidden ── */
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        /* Pause all active weather engines */
+        if (weatherEngine && weatherEngine._clock) weatherEngine._clock.pause();
+        /* Pause guide art engine clock */
+        if (guideArtEngine && guideArtEngine._clock) guideArtEngine._clock.pause();
+      } else {
+        /* Resume and reset clock to avoid dt spike */
+        if (weatherEngine && weatherEngine._clock) {
+          weatherEngine._clock.resume();
+          weatherEngine._clock.reset();
+        }
+        if (guideArtEngine && guideArtEngine._clock) {
+          guideArtEngine._clock.resume();
+          guideArtEngine._clock.reset();
+        }
+      }
     });
 
     /* ── Initialize ── */
@@ -1632,6 +2888,12 @@
   if (typeof window !== "undefined") {
     window.__VIBE_READING_TEST_HOOKS = Object.assign({}, window.__VIBE_READING_TEST_HOOKS, {
       createAudioController,
+      createFrameClock,
+      createPointerTracker,
+      createGradientSpriteCache,
+      createParticlePool,
+      getIntensityProfile,
+      smoothFalloff,
     });
   }
 
