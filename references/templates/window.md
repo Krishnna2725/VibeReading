@@ -85,20 +85,41 @@ stage-4.png       optional
 
 ## Window Control Language
 
-Agents must design the control as part of the window-side reading space itself.
+Agents should design the control as a refined frosted-glass interface layered
+over the window image. Do not over-literalize "window", "sill", "latch", or
+"frost" into awkward object props. The goal is a premium translucent UI that
+feels optically related to glass, reflection, and cold light.
 
 ### Control Contract
 
-- Controls feel like part of the window or glass structure.
+- Use a restrained glass panel system: translucent surface, backdrop blur,
+  subtle inner highlight, 1px low-contrast stroke, soft shadow, and light grain.
 - The default state is collapsed so the reading view stays clean.
-- Expanded state should still preserve most of the reading view.
-- The entry point should feel adjacent to the book and window: latch, condensation mark, glass-edge tab, paper slip, sill mark, or another window-native cue.
-- The runtime only wires stable hooks; it does not provide a fixed four-layer panel or fixed bottom-center dock.
+- Expanded state should preserve most of the reading view and avoid covering the
+  window center.
+- The entry point should be a small glass tab, quiet floating capsule, or edge
+  handle. It must look intentionally designed, not like a random button.
+
+### Recommended Control Design
+
+Use these design terms as the preferred recipe:
+
+- **Material**: frosted glass, `backdrop-filter: blur(18px-28px) saturate(1.1-1.3)`, translucent dark or light tint, fine noise texture if needed.
+- **Depth**: layered panel with inner glow, hairline border, soft ambient shadow,
+  and a faint reflection gradient across the top edge.
+- **Layout**: compact horizontal control bar or slim expandable tray; stage
+  switching as segmented controls; weather as `关 / 中 / 高`; timer as a small
+  digital capsule.
+- **Typography**: quiet Chinese UI text, 12-14px equivalent, medium letter
+  spacing, no oversized labels, no raw English control words.
+- **Motion**: slow 900-1400ms expand/collapse, opacity + transform only, soft
+  easing, no snapping or bouncing.
 
 ### Control Behavior
 
 - After guide completes, the control entry should remain discoverable but restrained.
-- Expand and collapse behavior should feel physically related to the window/book relationship.
+- Expand and collapse behavior should feel like a glass layer becoming clearer:
+  fade, slide, and sharpen rather than pop open.
 - Stage info, timer, weather, sound, and replay guide may be distributed across the window object, as long as the interaction language stays coherent.
 - The control must not become a pasted-on dashboard card.
 
@@ -106,7 +127,7 @@ Agents must design the control as part of the window-side reading space itself.
 
 Window pages need consistency of capability without losing book-specific authorship.
 The shared shell now guarantees wiring only. The page author decides how the
-glass, sill, latch, tabs, and slips become the actual interface.
+frosted-glass control system is composed for the current book.
 
 ## Stage Switching
 
@@ -143,9 +164,11 @@ Guide motion preset: `window-fog-clear` (particles fall like condensation, windo
 
 UI control vocabulary for window:
 
-- All controls use frosted glass / modern UI language
-- One consistent component style: translucent pill buttons, glass-edge sliders, minimal icons
-- Control entry: condensation mark, latch, paper slip, glass-edge tab (expand on click)
+- All controls use frosted glass / modern UI language.
+- One consistent component style: translucent pill buttons, segmented controls,
+  glass sliders, minimal icons, and compact digital timer capsules.
+- Control entry: small glass tab, edge handle, or restrained floating capsule
+  that expands on click.
 - No skeuomorphic knobs or mechanical textures
 
 Avoid:
@@ -153,5 +176,6 @@ Avoid:
 - interior furniture as main subject;
 - centered subtitle-only guide;
 - pasted generic companion cards or fixed dashboard slabs;
+- literal "window part" controls that look clumsy or decorative rather than usable;
 - stage chips covering the view;
 - image prompts that include UI instructions or text.
